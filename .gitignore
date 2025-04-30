@@ -1,0 +1,10 @@
+# Ignore Terraform’s local state, modules and lock file
+**/.terraform/
+*.tfstate
+*.tfstate.backup
+.terraform.lock.hcl
+*.tfstate*
+
+# Ignore crash logs and plan output
+crash.log
+*.tfplan

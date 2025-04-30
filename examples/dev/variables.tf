@@ -1,16 +1,21 @@
+variable "aws_region" {
+  description = "AWS region for all operations"
+  type        = string
+}
+
 variable "bucket_name" {
-  description = "The name of the S3 bucket"
+  description = "Name of the S3 bucket to create"
   type        = string
 }
 
 variable "acl" {
-  description = "Canned ACL to apply"
+  description = "The canned ACL to apply to the bucket"
   type        = string
   default     = "private"
 }
 
 variable "versioning_enabled" {
-  description = "Enable bucket versioning?"
+  description = "Whether to enable versioning on the bucket"
   type        = bool
   default     = false
 }

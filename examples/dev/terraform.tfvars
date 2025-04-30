@@ -1,5 +1,5 @@
 bucket_name        = "my-unique-playground-bucket-123"
-region             = "eu-west-2"
+aws_region         = "eu-west-2"
 acl                = "private"
 versioning_enabled = true
 
