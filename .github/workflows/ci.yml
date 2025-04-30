@@ -1,0 +1,76 @@
+# File: .github/workflows/ci.yml
+name: Terraform CI
+
+on:
+  pull_request:
+    paths:
+      - 'modules/**'
+      - 'examples/dev/**'
+  push:
+    branches: [ main ]
+    paths:
+      - 'modules/**'
+      - 'examples/dev/**'
+
+jobs:
+  fmt:
+    name: Check terraform fmt
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Terraform fmt (all .tf)
+        run: terraform fmt -check -recursive modules examples/dev
+
+  validate:
+    name: Terraform validate
+    runs-on: ubuntu-latest
+    needs: fmt
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: 1.5.7
+
+      - name: Init & Validate modules
+        run: |
+          cd modules
+          terraform init -backend=false
+          terraform validate
+
+      - name: Init & Validate example
+        run: |
+          cd ../examples/dev
+          terraform init -backend=false
+          terraform validate
+
+  tflint:
+    name: TFLint (modules only)
+    runs-on: ubuntu-latest
+    needs: validate
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run TFLint
+        uses: widdix/action-tflint@v1
+        with:
+          directory: modules
+
+  tfsec:
+    name: tfsec scan
+    runs-on: ubuntu-latest
+    needs: tflint
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Run tfsec (all .tf)
+        uses: aquasecurity/tfsec-action@v1
+        with:
+          directory: .
