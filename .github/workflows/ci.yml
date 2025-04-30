@@ -50,27 +50,25 @@ jobs:
         run: terraform -chdir=examples/dev validate
 
   tflint:
-    name: TFLint (modules + examples)
+    name: TFLint (modules & examples)
     runs-on: ubuntu-latest
     needs: validate
     steps:
       - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Setup Terraform (to fetch providers/plugins)
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: 1.5.7
-
       - name: Install TFLint
         run: |
-          curl -sSL https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
 
-      - name: Run TFLint on modules
-        run: tflint --init modules
+      - name: TFLint Init
+        run: tflint --init
 
-      - name: Run TFLint on examples
-        run: tflint --init examples/dev
+      - name: Lint modules
+        run: tflint --chdir=modules
+
+      - name: Lint examples
+        run: tflint --chdir=examples/dev
 
   tfsec:
     name: tfsec scan
