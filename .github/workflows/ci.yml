@@ -1,4 +1,4 @@
-# File: .github/workflows/ci.yml
+# Continuous Integration workflow for Terraform modules and examples
 name: Terraform CI
 
 on:
@@ -30,7 +30,7 @@ jobs:
         run: terraform fmt -check -recursive modules examples/dev
 
   validate:
-    name: Terraform validate
+    name: Validate Terraform configuration
     runs-on: ubuntu-latest
     needs: fmt
     steps:
@@ -41,17 +41,11 @@ jobs:
         with:
           terraform_version: 1.5.7
 
-      - name: Init & Validate modules
-        run: |
-          cd modules
-          terraform init -backend=false
-          terraform validate
+      - name: Terraform init (examples/dev)
+        run: terraform -chdir=examples/dev init -backend=false
 
-      - name: Init & Validate example
-        run: |
-          cd ../examples/dev
-          terraform init -backend=false
-          terraform validate
+      - name: Terraform validate (examples/dev)
+        run: terraform -chdir=examples/dev validate
 
   tflint:
     name: TFLint (modules only)
