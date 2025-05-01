@@ -16,7 +16,7 @@ on:
       - '**' # Matches all files
 
 jobs:
-  # Detect which directories changed
+  # Detect which directories changed #
   filter:
     name: 🔀 Path filter
     runs-on: ubuntu-latest
