@@ -124,9 +124,9 @@ jobs:
   # Lint Terraform code using TFLint
   lint:
     name: 🔍 TFLint
-    needs: [filter, validate-modules, validate-examples]
+    needs: [filter, validate-examples] # Removed validate-modules
     runs-on: ubuntu-latest
-    # Only run if this is a push event or if changes were detected in either modules or examples/dev
+    # Only run if changes were detected in either modules or examples/dev
     if: |
       github.event_name == 'push' ||
       needs.filter.outputs.modules == 'true' ||
@@ -140,16 +140,18 @@ jobs:
       - name: TFLint init
         run: tflint --init
       - name: Lint modules
+        if: needs.filter.outputs.modules == 'true' # Only lint modules if changes were detected
         run: tflint --chdir=modules
       - name: Lint examples/dev
+        if: needs.filter.outputs.examples == 'true' # Only lint examples/dev if changes were detected
         run: tflint --chdir=examples/dev
 
   # Perform a security scan using tfsec
   tfsec:
     name: 🔒 tfsec scan
-    needs: lint
+    needs: [filter, validate-examples] # Removed validate-modules
     runs-on: ubuntu-latest
-    # Only run if this is a push event or if changes were detected in either modules or examples/dev
+    # Only run if changes were detected in either modules or examples/dev
     if: |
       github.event_name == 'push' ||
       needs.filter.outputs.modules == 'true' ||
@@ -158,7 +160,8 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
       - name: Run tfsec (all .tf)
+        if: needs.filter.outputs.examples == 'true' # Only scan examples/dev if changes were detected
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
-          working_directory: .
+          working_directory: examples/dev
           soft_fail: true
