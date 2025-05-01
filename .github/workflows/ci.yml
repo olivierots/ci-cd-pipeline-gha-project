@@ -1,12 +1,7 @@
 # Terraform CI Pipeline
-# This pipeline is dedicated to Continuous Integration (CI) for Terraform configurations.
-# It performs the following tasks:
-# - Detects changes in specific directories (`modules/**` and `examples/dev/**`).
-# - Runs `terraform fmt` to ensure code formatting.
-# - Validates Terraform configurations (`terraform init` and `terraform validate`).
-# - Lints Terraform code using TFLint.
-# - Performs a security scan using tfsec.
-# The pipeline is triggered on pull requests and pushes to specific branches.
+# This pipeline dynamically runs CI jobs (fmt, validate, lint, tfsec) for Terraform configurations.
+# It detects changes in `modules` and `examples/dev` and runs jobs only for the changed directories.
+# If changes are detected in both directories, it runs the jobs for both.
 
 name: Terraform CI
 
@@ -48,9 +43,7 @@ jobs:
     name: 🖨️ fmt → modules
     needs: filter
     runs-on: ubuntu-latest
-    # Only run if this is a push event or if changes were detected in the modules directory
-    if: |
-      github.event_name == 'push' || needs.filter.outputs.modules == 'true'
+    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -66,9 +59,7 @@ jobs:
     name: 🖨️ fmt → examples/dev
     needs: filter
     runs-on: ubuntu-latest
-    # Only run if this is a push event or if changes were detected in the examples/dev directory
-    if: |
-      github.event_name == 'push' || needs.filter.outputs.examples == 'true'
+    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -84,9 +75,7 @@ jobs:
     name: ✅ validate → modules
     needs: [filter, fmt-modules]
     runs-on: ubuntu-latest
-    # Only run if this is a push event or if changes were detected in the modules directory
-    if: |
-      github.event_name == 'push' || needs.filter.outputs.modules == 'true'
+    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -105,9 +94,7 @@ jobs:
     name: ✅ validate → examples/dev
     needs: [filter, fmt-examples]
     runs-on: ubuntu-latest
-    # Only run if this is a push event or if changes were detected in the examples/dev directory
-    if: |
-      github.event_name == 'push' || needs.filter.outputs.examples == 'true'
+    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -122,15 +109,11 @@ jobs:
           terraform validate
 
   # Lint Terraform code using TFLint
-  lint:
-    name: 🔍 TFLint
-    needs: [filter, validate-examples] # Removed validate-modules
+  lint-modules:
+    name: 🔍 TFLint → modules
+    needs: [filter, validate-modules]
     runs-on: ubuntu-latest
-    # Only run if changes were detected in either modules or examples/dev
-    if: |
-      github.event_name == 'push' ||
-      needs.filter.outputs.modules == 'true' ||
-      needs.filter.outputs.examples == 'true'
+    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -140,27 +123,48 @@ jobs:
       - name: TFLint init
         run: tflint --init
       - name: Lint modules
-        if: needs.filter.outputs.modules == 'true' # Only lint modules if changes were detected
         run: tflint --chdir=modules
-      - name: Lint examples/dev
-        if: needs.filter.outputs.examples == 'true' # Only lint examples/dev if changes were detected
-        run: tflint --chdir=examples/dev
 
-  # Perform a security scan using tfsec
-  tfsec:
-    name: 🔒 tfsec scan
-    needs: [filter, validate-examples] # Removed validate-modules
+  lint-examples:
+    name: 🔍 TFLint → examples/dev
+    needs: [filter, validate-examples]
     runs-on: ubuntu-latest
-    # Only run if changes were detected in either modules or examples/dev
-    if: |
-      github.event_name == 'push' ||
-      needs.filter.outputs.modules == 'true' ||
-      needs.filter.outputs.examples == 'true'
+    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-      - name: Run tfsec (all .tf)
-        if: needs.filter.outputs.examples == 'true' # Only scan examples/dev if changes were detected
+      - name: Install TFLint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: TFLint init
+        run: tflint --init
+      - name: Lint examples/dev
+        run: tflint --chdir=examples/dev
+
+  # Perform a security scan using tfsec
+  tfsec-modules:
+    name: 🔒 tfsec → modules
+    needs: [filter, validate-modules]
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Run tfsec for modules
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: modules
+          soft_fail: true
+
+  tfsec-examples:
+    name: 🔒 tfsec → examples/dev
+    needs: [filter, validate-examples]
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Run tfsec for examples/dev
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
           working_directory: examples/dev
