@@ -35,8 +35,8 @@ jobs:
             examples:
               - 'examples/dev/**'
             unmatched:
-              - '**' # for any changes outside modules and examples/dev && If no changes in modules or examples/dev, set unmatched to true
-              - '!README.md' # skip CI when only README.md is changed
+              - '**' # If no changes in modules or examples/dev, set unmatched to true
+              - '!README.md' # Exclude README.md from triggering unmatched
 
   # Terraform fmt for modules
   fmt-modules:
