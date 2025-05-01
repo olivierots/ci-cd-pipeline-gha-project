@@ -16,7 +16,7 @@ on:
       - '**' # Matches all files
 
 jobs:
-  # Detect which directories changed #
+  # Detect which directories changed
   filter:
     name: 🔀 Path filter
     runs-on: ubuntu-latest
@@ -42,7 +42,7 @@ jobs:
     name: 🖨️ fmt → modules
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.unmatched == 'true' # Run for modules or other changes
+    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -58,7 +58,7 @@ jobs:
     name: 🖨️ fmt → examples/dev
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.unmatched == 'true' # Run for examples or other changes
+    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -74,7 +74,7 @@ jobs:
     name: ✅ validate → modules
     needs: fmt-modules
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.unmatched == 'true' # Run for modules or other changes
+    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -93,7 +93,7 @@ jobs:
     name: ✅ validate → examples/dev
     needs: fmt-examples
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.unmatched == 'true' # Run for examples or other changes
+    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -112,7 +112,7 @@ jobs:
     name: 🔍 TFLint → modules
     needs: validate-modules
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.unmatched == 'true' # Run for modules or other changes
+    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -128,7 +128,7 @@ jobs:
     name: 🔍 TFLint → examples/dev
     needs: validate-examples
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.unmatched == 'true' # Run for examples or other changes
+    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -145,7 +145,7 @@ jobs:
     name: 🔒 tfsec → modules
     needs: lint-modules
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.unmatched == 'true' # Run for modules or other changes
+    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -159,7 +159,7 @@ jobs:
     name: 🔒 tfsec → examples/dev
     needs: lint-examples
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.unmatched == 'true' # Run for examples or other changes
+    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
