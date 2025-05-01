@@ -1,4 +1,4 @@
-# File: .github/workflows/ci.yml
+# .github/workflows/ci.yml
 name: Terraform CI
 
 on:
@@ -15,8 +15,9 @@ on:
       - 'examples/dev/**'
 
 jobs:
+
   fmt:
-    name: Check terraform fmt
+    name: 🖨️ Check terraform fmt
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,58 +28,54 @@ jobs:
         with:
           terraform_version: 1.5.7
 
-      - name: Terraform fmt (all .tf)
+      - name: terraform fmt
         run: terraform fmt -check -recursive modules examples/dev
 
   validate:
-    name: Validate Terraform configuration
+    name: ✅ Terraform validate
     runs-on: ubuntu-latest
     needs: fmt
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
+      - uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: 1.5.7
 
-      - name: Terraform init (examples/dev)
+      - name: Init example dev
         run: terraform -chdir=examples/dev init -backend=false
 
-      - name: Terraform validate (examples/dev)
+      - name: Validate example dev
         run: terraform -chdir=examples/dev validate
 
-  tflint:
-    name: TFLint (modules & examples)
+  lint:
+    name: 🔍 TFLint (modules & examples)
     runs-on: ubuntu-latest
     needs: validate
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Install TFLint
         run: |
           curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
 
-      - name: TFLint Init
+      - name: TFLint init
         run: tflint --init
 
       - name: Lint modules
         run: tflint --chdir=modules
 
-      - name: Lint examples
+      - name: Lint example dev
         run: tflint --chdir=examples/dev
 
   tfsec:
-    name: tfsec scan
+    name: 🔒 tfsec scan
     runs-on: ubuntu-latest
-    needs: tflint
+    needs: lint
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Run tfsec (all .tf)
-        uses: aquasecurity/tfsec-action@v1
+      - name: Run tfsec
+        uses: aquasecurity/tfsec-action@v1.0.3
         with:
-          directory: .
+          working_directory: .
