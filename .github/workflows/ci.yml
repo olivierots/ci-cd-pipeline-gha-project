@@ -1,8 +1,18 @@
-# .github/workflows/ci.yml
+# Terraform CI Pipeline
+# This pipeline is dedicated to Continuous Integration (CI) for Terraform configurations.
+# It performs the following tasks:
+# - Detects changes in specific directories (`modules/**` and `examples/dev/**`).
+# - Runs `terraform fmt` to ensure code formatting.
+# - Validates Terraform configurations (`terraform init` and `terraform validate`).
+# - Lints Terraform code using TFLint.
+# - Performs a security scan using tfsec.
+# The pipeline is triggered on pull requests and pushes to specific branches.
+
 name: Terraform CI
 
 on:
   pull_request:
+    types: [opened, reopened, synchronize]
     paths:
       - 'modules/**'
       - 'examples/dev/**'
@@ -15,68 +25,139 @@ on:
       - 'examples/dev/**'
 
 jobs:
-
-  fmt:
-    name: 🖨️ Check terraform fmt
+  # Detect which directories changed
+  filter:
+    name: 🔀 Path filter
     runs-on: ubuntu-latest
+    outputs:
+      modules: ${{ steps.filter.outputs.modules }}
+      examples: ${{ steps.filter.outputs.examples }}
+    steps:
+      - uses: actions/checkout@v3
+      - id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            modules:
+              - 'modules/**'
+            examples:
+              - 'examples/dev/**'
+
+  # Run terraform fmt for modules
+  fmt-modules:
+    name: 🖨️ fmt → modules
+    needs: filter
+    runs-on: ubuntu-latest
+    # Only run if this is a push event or if changes were detected in the modules directory
+    if: |
+      github.event_name == 'push' || needs.filter.outputs.modules == 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v3
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.5.7
+          terraform_version: '1.5.7'
+      - name: terraform fmt (modules)
+        run: terraform fmt -check -recursive modules
 
-      - name: terraform fmt
-        run: terraform fmt -check -recursive modules examples/dev
-
-  validate:
-    name: ✅ Terraform validate
+  # Run terraform fmt for examples/dev
+  fmt-examples:
+    name: 🖨️ fmt → examples/dev
+    needs: filter
     runs-on: ubuntu-latest
-    needs: fmt
+    # Only run if this is a push event or if changes were detected in the examples/dev directory
+    if: |
+      github.event_name == 'push' || needs.filter.outputs.examples == 'true'
     steps:
-      - uses: actions/checkout@v3
-
-      - uses: hashicorp/setup-terraform@v2
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
         with:
-          terraform_version: 1.5.7
+          terraform_version: '1.5.7'
+      - name: terraform fmt (examples/dev)
+        run: terraform fmt -check -recursive examples/dev
 
-      - name: Init example dev
-        run: terraform -chdir=examples/dev init -backend=false
-
-      - name: Validate example dev
-        run: terraform -chdir=examples/dev validate
-
-  lint:
-    name: 🔍 TFLint (modules & examples)
+  # Validate Terraform configurations for modules
+  validate-modules:
+    name: ✅ validate → modules
+    needs: [filter, fmt-modules]
     runs-on: ubuntu-latest
-    needs: validate
+    # Only run if this is a push event or if changes were detected in the modules directory
+    if: |
+      github.event_name == 'push' || needs.filter.outputs.modules == 'true'
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate (modules)
+        run: |
+          cd modules
+          terraform init -backend=false
+          terraform validate
 
+  # Validate Terraform configurations for examples/dev
+  validate-examples:
+    name: ✅ validate → examples/dev
+    needs: [filter, fmt-examples]
+    runs-on: ubuntu-latest
+    # Only run if this is a push event or if changes were detected in the examples/dev directory
+    if: |
+      github.event_name == 'push' || needs.filter.outputs.examples == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate (examples/dev)
+        run: |
+          cd examples/dev
+          terraform init -backend=false
+          terraform validate
+
+  # Lint Terraform code using TFLint
+  lint:
+    name: 🔍 TFLint
+    needs: [filter, validate-modules, validate-examples]
+    runs-on: ubuntu-latest
+    # Only run if this is a push event or if changes were detected in either modules or examples/dev
+    if: |
+      github.event_name == 'push' ||
+      needs.filter.outputs.modules == 'true' ||
+      needs.filter.outputs.examples == 'true'
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
       - name: Install TFLint
         run: |
           curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-
       - name: TFLint init
         run: tflint --init
-
       - name: Lint modules
         run: tflint --chdir=modules
-
-      - name: Lint example dev
+      - name: Lint examples/dev
         run: tflint --chdir=examples/dev
 
+  # Perform a security scan using tfsec
   tfsec:
     name: 🔒 tfsec scan
-    runs-on: ubuntu-latest
     needs: lint
-    #continue-on-error: true
+    runs-on: ubuntu-latest
+    # Only run if this is a push event or if changes were detected in either modules or examples/dev
+    if: |
+      github.event_name == 'push' ||
+      needs.filter.outputs.modules == 'true' ||
+      needs.filter.outputs.examples == 'true'
     steps:
-      - uses: actions/checkout@v3
-
-      - name: Run tfsec
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Run tfsec (all .tf)
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
           working_directory: .
