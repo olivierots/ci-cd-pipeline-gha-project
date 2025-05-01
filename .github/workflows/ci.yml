@@ -13,7 +13,7 @@ on:
       - '**' # Matches all files
   push:
     paths:
-      - '**' # Matches all files
+      - '**' # Matches all files 
 
 jobs:
   # Detect which directories changed
@@ -35,7 +35,8 @@ jobs:
             examples:
               - 'examples/dev/**'
             unmatched:
-              - '**' # Matches everything not covered by the above filters
+              - '**' # for any changes outside modules and examples/dev && If no changes in modules or examples/dev, set unmatched to true
+              - '!README.md' # skip CI when only README.md is changed
 
   # Terraform fmt for modules
   fmt-modules:
