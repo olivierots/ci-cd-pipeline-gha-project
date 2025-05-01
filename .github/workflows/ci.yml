@@ -35,8 +35,8 @@ jobs:
             examples:
               - 'examples/dev/**'
             unmatched:
-              - '**' # If no changes in modules or examples/dev, set unmatched to true
-              - '!README.md' # Exclude README.md from triggering unmatched
+              - '**' # Matches everything not covered by the above filters
+              - '!/README.md' # Explicitly exclude README.md in the root directory
       - name: Debug filter outputs
         run: |
           echo "Modules: ${{ steps.filter.outputs.modules }}"
