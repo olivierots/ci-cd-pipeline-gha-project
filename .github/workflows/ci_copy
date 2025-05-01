@@ -5,6 +5,7 @@
 
 name: Terraform CI
 
+# Triggers the workflow on pull requests or pushes affecting `modules` or `examples/dev`.
 on:
   pull_request:
     types: [opened, reopened, synchronize]
@@ -38,12 +39,12 @@ jobs:
             examples:
               - 'examples/dev/**'
 
-  # Terraform fmt for modules
+  # Run terraform fmt for modules
   fmt-modules:
     name: 🖨️ fmt → modules
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true'
+    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -54,12 +55,12 @@ jobs:
       - name: terraform fmt (modules)
         run: terraform fmt -check -recursive modules
 
-  # Terraform fmt for examples/dev
+  # Run terraform fmt for examples/dev
   fmt-examples:
     name: 🖨️ fmt → examples/dev
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true'
+    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -70,12 +71,12 @@ jobs:
       - name: terraform fmt (examples/dev)
         run: terraform fmt -check -recursive examples/dev
 
-  # Terraform validate for modules
+  # Validate Terraform configurations for modules
   validate-modules:
     name: ✅ validate → modules
-    needs: fmt-modules
+    needs: [filter, fmt-modules]
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true'
+    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -89,12 +90,12 @@ jobs:
           terraform init -backend=false
           terraform validate
 
-  # Terraform validate for examples/dev
+  # Validate Terraform configurations for examples/dev
   validate-examples:
     name: ✅ validate → examples/dev
-    needs: fmt-examples
+    needs: [filter, fmt-examples]
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true'
+    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -108,12 +109,12 @@ jobs:
           terraform init -backend=false
           terraform validate
 
-  # TFLint for modules
+  # Lint Terraform code using TFLint
   lint-modules:
     name: 🔍 TFLint → modules
-    needs: validate-modules
+    needs: [filter, validate-modules]
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true'
+    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -125,12 +126,11 @@ jobs:
       - name: Lint modules
         run: tflint --chdir=modules
 
-  # TFLint for examples/dev
   lint-examples:
     name: 🔍 TFLint → examples/dev
-    needs: validate-examples
+    needs: [filter, validate-examples]
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true'
+    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -142,12 +142,12 @@ jobs:
       - name: Lint examples/dev
         run: tflint --chdir=examples/dev
 
-  # tfsec for modules
+  # Perform a security scan using tfsec
   tfsec-modules:
     name: 🔒 tfsec → modules
-    needs: lint-modules
+    needs: [filter, validate-modules]
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true'
+    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -157,12 +157,11 @@ jobs:
           working_directory: modules
           soft_fail: true
 
-  # tfsec for examples/dev
   tfsec-examples:
     name: 🔒 tfsec → examples/dev
-    needs: lint-examples
+    needs: [filter, validate-examples]
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true'
+    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
     steps:
       - name: Checkout
         uses: actions/checkout@v3
