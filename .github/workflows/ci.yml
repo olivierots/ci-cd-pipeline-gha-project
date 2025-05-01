@@ -1,21 +1,19 @@
 # Terraform CI Pipeline
 # This pipeline dynamically runs CI jobs (fmt, validate, lint, tfsec) for Terraform configurations.
 # It detects changes in `modules` and `examples/dev` and runs jobs only for the changed directories.
-# If changes are detected in both directories, it runs the jobs for both.
+# If changes are detected outside these directories, it triggers a full build.
 
 name: Terraform CI
 
-# Triggers the workflow on pull requests or pushes affecting `modules` or `examples/dev`.
+# Triggers the workflow on pull requests or pushes affecting `modules`, `examples/dev`, or any other files.
 on:
   pull_request:
     types: [opened, reopened, synchronize]
     paths:
-      - 'modules/**'
-      - 'examples/dev/**'
+      - '**' # Matches all files
   push:
     paths:
-      - 'modules/**'
-      - 'examples/dev/**'
+      - '**' # Matches all files 
 
 jobs:
   # Detect which directories changed
@@ -25,6 +23,7 @@ jobs:
     outputs:
       modules: ${{ steps.filter.outputs.modules }}
       examples: ${{ steps.filter.outputs.examples }}
+      other: ${{ steps.filter.outputs.unmatched }}
     steps:
       - uses: actions/checkout@v3
       - id: filter
@@ -35,13 +34,21 @@ jobs:
               - 'modules/**'
             examples:
               - 'examples/dev/**'
+            unmatched:
+              - '**' # If no changes in modules or examples/dev, set unmatched to true
+              - '!README.md' # Exclude README.md from triggering unmatched
+      - name: Debug filter outputs
+        run: |
+          echo "Modules: ${{ steps.filter.outputs.modules }}"
+          echo "Examples: ${{ steps.filter.outputs.examples }}"
+          echo "Unmatched: ${{ steps.filter.outputs.unmatched }}"
 
   # Terraform fmt for modules
   fmt-modules:
     name: 🖨️ fmt → modules
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
+    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -57,7 +64,7 @@ jobs:
     name: 🖨️ fmt → examples/dev
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
+    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -71,9 +78,9 @@ jobs:
   # Terraform validate for modules
   validate-modules:
     name: ✅ validate → modules
-    needs: fmt-modules # Depends on fmt-modules job
+    needs: fmt-modules
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
+    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -90,9 +97,9 @@ jobs:
   # Terraform validate for examples/dev
   validate-examples:
     name: ✅ validate → examples/dev
-    needs: fmt-examples # Depends on fmt-examples job
+    needs: fmt-examples
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
+    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -109,9 +116,9 @@ jobs:
   # Lint Terraform code using TFLint
   lint-modules:
     name: 🔍 TFLint → modules
-    needs: validate-modules # Depends on validate-modules job
+    needs: validate-modules
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
+    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -125,9 +132,9 @@ jobs:
 
   lint-examples:
     name: 🔍 TFLint → examples/dev
-    needs: validate-examples # Depends on validate-examples job
+    needs: validate-examples
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
+    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -142,9 +149,9 @@ jobs:
   # Perform a security scan using tfsec
   tfsec-modules:
     name: 🔒 tfsec → modules
-    needs: lint-modules # Depends on lint-modules job
+    needs: lint-modules
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' # Only run if changes were detected in the modules directory
+    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -156,9 +163,9 @@ jobs:
 
   tfsec-examples:
     name: 🔒 tfsec → examples/dev
-    needs: lint-examples # Depends on lint-examples job
+    needs: lint-examples
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' # Only run if changes were detected in the examples/dev directory
+    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
     steps:
       - name: Checkout
         uses: actions/checkout@v3
