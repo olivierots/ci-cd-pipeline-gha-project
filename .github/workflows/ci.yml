@@ -13,9 +13,6 @@ on:
       - 'modules/**'
       - 'examples/dev/**'
   push:
-    branches:
-      - 'main'
-      - 'feature/**'
     paths:
       - 'modules/**'
       - 'examples/dev/**'
