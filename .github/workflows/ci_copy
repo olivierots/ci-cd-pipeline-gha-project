@@ -36,11 +36,9 @@ jobs:
             examples:
               - 'examples/dev/**'
             unmatched:
-              - '**'               # Matches everything not covered by the above filters
-              - '!modules/**'      # Exclude any modules changes
-              - '!examples/dev/**' # Exclude any examples/dev changes
-              - '!README.md'       # Exclude README.md in the root directory
-              - '!/README.md'      # Explicitly exclude README.md in the root directory
+              - '**' # Matches everything not covered by the above filters
+              - '!README.md' # Exclude README.md in the root directory
+              - '!/README.md' # Explicitly exclude README.md in the root directory
 
   # Terraform fmt for modules
   fmt-modules:
