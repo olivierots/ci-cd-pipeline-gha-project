@@ -124,7 +124,7 @@ jobs:
       - name: TFLint init
         run: tflint --init
       - name: Lint modules
-        run: tflint --chdir=modules --verbose
+        run: tflint --chdir=modules
 
   lint-examples:
     name: 🔍 TFLint → examples/dev
@@ -140,7 +140,7 @@ jobs:
       - name: TFLint init
         run: tflint --init
       - name: Lint examples/dev
-        run: tflint --chdir=examples/dev --verbose
+        run: tflint --chdir=examples/dev
 
   # Perform a security scan using tfsec
   tfsec-modules:
