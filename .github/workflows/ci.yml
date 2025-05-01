@@ -29,6 +29,7 @@ jobs:
       - id: filter
         uses: dorny/paths-filter@v2
         with:
+          write-to-files: true # Write matched files to outputs
           filters: |
             modules:
               - 'modules/**'
@@ -36,16 +37,16 @@ jobs:
               - 'examples/dev/**'
             unmatched:
               - '**' # Matches everything not covered by the above filters
-              - '!/README.md' # Explicitly exclude README.md in the root directory
-              - '!README.md/**' # Exclude README.md in case of misinterpretation
               - '!README.md' # Exclude README.md in the root directory
-      - name: Debug filter outputs
-        run: |
-          echo "Modules: ${{ steps.filter.outputs.modules }}"
-          echo "Examples: ${{ steps.filter.outputs.examples }}"
-          echo "Unmatched: ${{ steps.filter.outputs.unmatched }}"
+              - '!/README.md' # Explicitly exclude README.md in the root directory
       - name: Debug matched files
-        run: cat ${{ steps.filter.outputs.unmatched }}
+        run: |
+          echo "Matched files for modules:"
+          cat ${{ steps.filter.outputs.modules }}
+          echo "Matched files for examples:"
+          cat ${{ steps.filter.outputs.examples }}
+          echo "Matched files for unmatched:"
+          cat ${{ steps.filter.outputs.unmatched }}
 
   # Terraform fmt for modules
   fmt-modules:
