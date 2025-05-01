@@ -37,6 +37,11 @@ jobs:
             unmatched:
               - '**' # If no changes in modules or examples/dev, set unmatched to true
               - '!README.md' # Exclude README.md from triggering unmatched
+      - name: Debug filter outputs
+        run: |
+          echo "Modules: ${{ steps.filter.outputs.modules }}"
+          echo "Examples: ${{ steps.filter.outputs.examples }}"
+          echo "Unmatched: ${{ steps.filter.outputs.unmatched }}"
 
   # Terraform fmt for modules
   fmt-modules:
