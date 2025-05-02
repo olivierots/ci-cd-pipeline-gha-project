@@ -3,5 +3,5 @@ module "ssm_param" {
   name   = var.name
   value  = var.value
   #type   = var.type
-  tags   = var.tags
+  tags = var.tags
 }
