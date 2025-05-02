@@ -44,7 +44,8 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with: { terraform_version: '1.5.7' }
+        with:
+          terraform_version: '1.5.7'
       - name: terraform fmt (s3_bucket)
         run: terraform fmt -check -recursive modules/s3_bucket
 
@@ -58,49 +59,46 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with: { terraform_version: '1.5.7' }
+        with:
+          terraform_version: '1.5.7'
       - name: terraform fmt (ssm_parameter)
         run: terraform fmt -check -recursive modules/ssm_parameter
 
-  # 4) validate → s3_bucket
-  validate-s3:
-    name: ✅ validate → s3_bucket
-    needs: fmt-s3
+  # 4) validate → modules
+  validate-modules:
+    name: ✅ validate → modules
+    needs: [filter, fmt-modules]
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
+    if: needs.filter.outputs.modules == 'true'
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with: { terraform_version: '1.5.7' }
-      - name: Init & validate module
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: "1.5.7"
+      - name: Init & validate s3_bucket
         run: |
-          cd modules/s3_bucket/examples/dev
-          terraform init -backend=false
-          terraform validate
-          cd ../../..
-          terraform init -backend=false modules/s3_bucket
-          terraform validate modules/s3_bucket
+          terraform -chdir=modules/s3_bucket init -backend=false
+          terraform -chdir=modules/s3_bucket validate
+      - name: Init & validate ssm_parameter
+        run: |
+          terraform -chdir=modules/ssm_parameter init -backend=false
+          terraform -chdir=modules/ssm_parameter validate
 
-  # 5) validate → ssm_parameter
-  validate-ssm:
-    name: ✅ validate → ssm_parameter
-    needs: fmt-ssm
+  # 5) validate → examples/dev
+  validate-examples:
+    name: ✅ validate → examples/dev
+    needs: [filter, fmt-examples]
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
+    if: needs.filter.outputs.examples == 'true'
     steps:
       - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with: { terraform_version: '1.5.7' }
-      - name: Init & validate module
+      - uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: "1.5.7"
+      - name: Init & validate examples/dev
         run: |
-          cd modules/ssm_parameter/examples/dev
-          terraform init -backend=false
-          terraform validate
-          cd ../../..
-          terraform init -backend=false modules/ssm_parameter
-          terraform validate modules/ssm_parameter
+          terraform -chdir=examples/dev init -backend=false
+          terraform -chdir=examples/dev validate
 
   # 6) lint → s3_bucket
   lint-s3:
@@ -111,8 +109,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install TFLint
-        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh \|
-               bash
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
       - name: tflint (s3_bucket)
         run: tflint --chdir=modules/s3_bucket --init
 
@@ -125,8 +123,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install TFLint
-        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh \|
-               bash
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
       - name: tflint (ssm_parameter)
         run: tflint --chdir=modules/ssm_parameter --init
 
