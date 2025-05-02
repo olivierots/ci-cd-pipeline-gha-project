@@ -22,6 +22,7 @@ jobs:
       - id: filter
         uses: dorny/paths-filter@v2
         with:
+          list-files: 'matched' # Enable output of matched files
           filters: |
             s3:
               - 'modules/s3_bucket/**' # Match all files under s3_bucket
@@ -31,7 +32,6 @@ jobs:
               - '**' # Match everything
               - '!modules/s3_bucket/**' # Exclude s3_bucket files
               - '!modules/ssm_parameter/**' # Exclude ssm_parameter files
-              - '!.github/workflows/**' # Exclude workflow files
 
       - name: Debug filter outputs
         run: |
