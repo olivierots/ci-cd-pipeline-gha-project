@@ -1,4 +1,4 @@
-bucket_name        = "my-unique-playground-bucket-13"
+bucket_name        = "my-unique-playground-bucket-123"
 aws_region         = "eu-west-2"
 acl                = "private"
 versioning_enabled = true
