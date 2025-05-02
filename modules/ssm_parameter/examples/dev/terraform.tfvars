@@ -6,3 +6,4 @@ tags = {
   Project     = "ssm-module-demo"
   Owner       = "Olivierots"
 }
+# Test change"
