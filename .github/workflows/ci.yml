@@ -1,175 +1,159 @@
-# Terraform CI Pipeline
-# This pipeline dynamically runs CI jobs (fmt, validate, lint, tfsec) for Terraform configurations.
-# It detects changes in `modules` and `examples/dev` and runs jobs only for the changed directories.
-# If changes are detected outside these directories, it triggers a full build.
-
+# .github/workflows/ci.yml
 name: Terraform CI
 
-# Triggers the workflow on pull requests or pushes affecting `modules`, `examples/dev`, or any other files.
 on:
   pull_request:
     types: [opened, reopened, synchronize]
     paths:
-      - '**' # Matches all files
+      - '**'
   push:
     paths:
-      - '**' # Matches all files 
+      - '**'
 
 jobs:
-  # Detect which directories changed
+  # 1) Detect which part of the repo changed
   filter:
     name: 🔀 Path filter
     runs-on: ubuntu-latest
     outputs:
-      modules: ${{ steps.filter.outputs.modules }}
-      examples: ${{ steps.filter.outputs.examples }}
-      other: ${{ steps.filter.outputs.unmatched }}
+      s3: ${{ steps.f.outputs.s3_bucket }}
+      ssm: ${{ steps.f.outputs.ssm_parameter }}
+      other: ${{ steps.f.outputs.unmatched }}
     steps:
       - uses: actions/checkout@v3
-      - id: filter
+      - id: f
         uses: dorny/paths-filter@v3
         with:
-          write-to-files: true # still testing
           filters: |
-            modules:
-              - 'modules/**'
-            examples:
-              - 'examples/dev/**'
+            s3_bucket:
+              - 'modules/s3_bucket/**'
+            ssm_parameter:
+              - 'modules/ssm_parameter/**'
             unmatched:
-              - '**'               # Matches everything else other than modules and examples
-              - '!modules/**'      # Exclude any modules changes
-              - '!examples/dev/**' # Exclude any examples/dev changes
-              - '!README.md'       # Exclude README.md in the root directory
-              - '!/README.md'      # Explicitly exclude README.md in the root directory
+              - '**'
+              - '!modules/s3_bucket/**'
+              - '!modules/ssm_parameter/**'
 
-  # Terraform fmt for modules
-  fmt-modules:
-    name: 🖨️ fmt → modules
+  # 2) fmt → s3_bucket
+  fmt-s3:
+    name: 🖨️ fmt → s3_bucket
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
+    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: terraform fmt (modules)
-        run: terraform fmt -check -recursive modules
+        with: { terraform_version: '1.5.7' }
+      - name: terraform fmt (s3_bucket)
+        run: terraform fmt -check -recursive modules/s3_bucket
 
-  # Terraform fmt for examples/dev
-  fmt-examples:
-    name: 🖨️ fmt → examples/dev
+  # 3) fmt → ssm_parameter
+  fmt-ssm:
+    name: 🖨️ fmt → ssm_parameter
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
+    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: terraform fmt (examples/dev)
-        run: terraform fmt -check -recursive examples/dev
+        with: { terraform_version: '1.5.7' }
+      - name: terraform fmt (ssm_parameter)
+        run: terraform fmt -check -recursive modules/ssm_parameter
 
-  # Terraform validate for modules
-  validate-modules:
-    name: ✅ validate → modules
-    needs: fmt-modules
+  # 4) validate → s3_bucket
+  validate-s3:
+    name: ✅ validate → s3_bucket
+    needs: fmt-s3
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
+    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: Init & validate (modules)
+        with: { terraform_version: '1.5.7' }
+      - name: Init & validate module
         run: |
-          cd modules
+          cd modules/s3_bucket/examples/dev
           terraform init -backend=false
           terraform validate
+          cd ../../..
+          terraform init -backend=false modules/s3_bucket
+          terraform validate modules/s3_bucket
 
-  # Terraform validate for examples/dev
-  validate-examples:
-    name: ✅ validate → examples/dev
-    needs: fmt-examples
+  # 5) validate → ssm_parameter
+  validate-ssm:
+    name: ✅ validate → ssm_parameter
+    needs: fmt-ssm
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
+    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: Init & validate (examples/dev)
+        with: { terraform_version: '1.5.7' }
+      - name: Init & validate module
         run: |
-          cd examples/dev
+          cd modules/ssm_parameter/examples/dev
           terraform init -backend=false
           terraform validate
+          cd ../../..
+          terraform init -backend=false modules/ssm_parameter
+          terraform validate modules/ssm_parameter
 
-  # Lint Terraform code using TFLint
-  lint-modules:
-    name: 🔍 TFLint → modules
-    needs: validate-modules
+  # 6) lint → s3_bucket
+  lint-s3:
+    name: 🔍 TFLint → s3_bucket
+    needs: validate-s3
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
+    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
       - name: Install TFLint
-        run: |
-          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-      - name: TFLint init
-        run: tflint --init
-      - name: Lint modules
-        run: tflint --chdir=modules
+        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh \|
+               bash
+      - name: tflint (s3_bucket)
+        run: tflint --chdir=modules/s3_bucket --init
 
-  lint-examples:
-    name: 🔍 TFLint → examples/dev
-    needs: validate-examples
+  # 7) lint → ssm_parameter
+  lint-ssm:
+    name: 🔍 TFLint → ssm_parameter
+    needs: validate-ssm
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
+    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
       - name: Install TFLint
-        run: |
-          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-      - name: TFLint init
-        run: tflint --init
-      - name: Lint examples/dev
-        run: tflint --chdir=examples/dev
+        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh \|
+               bash
+      - name: tflint (ssm_parameter)
+        run: tflint --chdir=modules/ssm_parameter --init
 
-  # Perform a security scan using tfsec
-  tfsec-modules:
-    name: 🔒 tfsec → modules
-    needs: lint-modules
+  # 8) tfsec → s3_bucket
+  tfsec-s3:
+    name: 🔒 tfsec → s3_bucket
+    needs: lint-s3
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.modules == 'true' || needs.filter.outputs.other == 'true' # Run for modules or other changes
+    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Run tfsec for modules
+      - uses: actions/checkout@v3
+      - name: tfsec (s3_bucket)
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
-          working_directory: modules
+          working_directory: modules/s3_bucket
           soft_fail: true
 
-  tfsec-examples:
-    name: 🔒 tfsec → examples/dev
-    needs: lint-examples
+  # 9) tfsec → ssm_parameter
+  tfsec-ssm:
+    name: 🔒 tfsec → ssm_parameter
+    needs: lint-ssm
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.examples == 'true' || needs.filter.outputs.other == 'true' # Run for examples or other changes
+    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v3
-      - name: Run tfsec for examples/dev
+      - uses: actions/checkout@v3
+      - name: tfsec (ssm_parameter)
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
-          working_directory: examples/dev
+          working_directory: modules/ssm_parameter
           soft_fail: true
