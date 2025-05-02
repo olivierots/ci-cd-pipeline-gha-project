@@ -1,0 +1,173 @@
+# .github/workflows/ci.yml
+name: Terraform CI
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - '**'
+  push:
+    paths:
+      - '**'
+
+jobs:
+  # 1) Detect which part of the repo changed
+  filter:
+    name: 🔀 Path filter
+    runs-on: ubuntu-latest
+    outputs:
+      s3: ${{ steps.filter.outputs.s3 }}
+      ssm: ${{ steps.filter.outputs.ssm }}
+      other: ${{ steps.filter.outputs.unmatched }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - id: filter
+        uses: dorny/paths-filter@v2
+        with:
+          filters: |
+            s3:
+              - 'modules/s3_bucket/**' # Match all files under s3_bucket
+            ssm:
+              - 'modules/ssm_parameter/**' # Match all files under ssm_parameter
+            unmatched:
+              - '**' # Match everything
+              - '!modules/s3_bucket/**' # Exclude s3_bucket files
+              - '!modules/ssm_parameter/**' # Exclude ssm_parameter files
+
+      - name: Debug filter outputs
+        run: |
+          echo "Matched files for s3: ${{ steps.filter.outputs.s3 }}"
+          echo "Matched files for ssm: ${{ steps.filter.outputs.ssm }}"
+          echo "Matched files for unmatched: ${{ steps.filter.outputs.unmatched }}"
+          
+  # 2) fmt → s3_bucket
+  fmt-s3:
+    name: 🖨️ fmt → s3_bucket
+    needs: filter
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.s3 == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: terraform fmt (s3_bucket)
+        run: terraform fmt -check -recursive modules/s3_bucket
+
+  # 3) fmt → ssm_parameter
+  fmt-ssm:
+    name: 🖨️ fmt → ssm_parameter
+    needs: filter
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.ssm == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: terraform fmt (ssm_parameter)
+        run: terraform fmt -check -recursive modules/ssm_parameter
+
+  # 4) validate → s3_bucket
+  validate-s3:
+    name: ✅ validate → s3_bucket
+    needs: fmt-s3
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.s3 == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate example (s3_bucket)
+        run: |
+          cd modules/s3_bucket/examples/dev
+          terraform init -backend=false
+          terraform validate
+      - name: Init & validate module (s3_bucket)
+        run: |
+          terraform -chdir=modules/s3_bucket init -backend=false
+          terraform -chdir=modules/s3_bucket validate
+
+  # 5) validate → ssm_parameter
+  validate-ssm:
+    name: ✅ validate → ssm_parameter
+    needs: fmt-ssm
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.ssm == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate example (ssm_parameter)
+        run: |
+          cd modules/ssm_parameter/examples/dev
+          terraform init -backend=false
+          terraform validate
+      - name: Init & validate module (ssm_parameter)
+        run: |
+          terraform -chdir=modules/ssm_parameter init -backend=false
+          terraform -chdir=modules/ssm_parameter validate
+
+  # 6) lint → s3_bucket
+  lint-s3:
+    name: 🔍 TFLint → s3_bucket
+    needs: validate-s3
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.s3 == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TFLint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: tflint (s3_bucket)
+        run: tflint --chdir=modules/s3_bucket --init
+
+  # 7) lint → ssm_parameter
+  lint-ssm:
+    name: 🔍 TFLint → ssm_parameter
+    needs: validate-ssm
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.ssm == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install TFLint
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: tflint (ssm_parameter)
+        run: tflint --chdir=modules/ssm_parameter --init
+
+  # 8) tfsec → s3_bucket
+  tfsec-s3:
+    name: 🔒 tfsec → s3_bucket
+    needs: lint-s3
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.s3 == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: tfsec (s3_bucket)
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: modules/s3_bucket
+          soft_fail: true
+
+  # 9) tfsec → ssm_parameter
+  tfsec-ssm:
+    name: 🔒 tfsec → ssm_parameter
+    needs: lint-ssm
+    runs-on: ubuntu-latest
+    if: needs.filter.outputs.ssm == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: tfsec (ssm_parameter)
+        uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: modules/ssm_parameter
+          soft_fail: true
