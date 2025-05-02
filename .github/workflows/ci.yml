@@ -1,7 +1,6 @@
 # .github/workflows/ci.yml
 name: Terraform CI
 
-# Trigger on any push or PR touches anything
 on:
   pull_request:
     types: [opened, reopened, synchronize]
@@ -12,30 +11,31 @@ on:
       - '**'
 
 jobs:
-  # 1) Figure out which paths changed
+  # 1) detect which areas changed
   filter:
     name: 🔀 Path filter
     runs-on: ubuntu-latest
     outputs:
-      s3:    ${{ steps.filter.outputs.s3_bucket }}
-      ssm:   ${{ steps.filter.outputs.ssm_parameter }}
-      other: ${{ steps.filter.outputs.unmatched }}
+      s3:    ${{ steps.filter.outputs.s3 }}
+      ssm:   ${{ steps.filter.outputs.ssm }}
+      other: ${{ steps.filter.outputs.other }}
     steps:
       - uses: actions/checkout@v3
       - id: filter
         uses: dorny/paths-filter@v3
         with:
           filters: |
-            s3_bucket:
+            s3:
               - 'modules/s3_bucket/**'
-            ssm_parameter:
+            ssm:
               - 'modules/ssm_parameter/**'
-            unmatched:
+            other:
+              # match everything, then exclude our two modules
               - '**'
               - '!modules/s3_bucket/**'
               - '!modules/ssm_parameter/**'
 
-  # 2) terraform fmt → modules/s3_bucket
+  # 2) fmt → s3_bucket
   fmt-s3:
     name: 🖨️ fmt → s3_bucket
     needs: filter
@@ -45,11 +45,12 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with: { terraform_version: '1.5.7' }
+        with:
+          terraform_version: '1.5.7'
       - name: terraform fmt (s3)
         run: terraform fmt -check -recursive modules/s3_bucket
 
-  # 3) terraform fmt → modules/ssm_parameter
+  # 3) fmt → ssm_parameter
   fmt-ssm:
     name: 🖨️ fmt → ssm_parameter
     needs: filter
@@ -59,11 +60,12 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with: { terraform_version: '1.5.7' }
+        with:
+          terraform_version: '1.5.7'
       - name: terraform fmt (ssm)
         run: terraform fmt -check -recursive modules/ssm_parameter
 
-  # 4) terraform validate → modules/s3_bucket
+  # 4) init & validate → s3_bucket
   validate-s3:
     name: ✅ validate → s3_bucket
     needs: fmt-s3
@@ -73,17 +75,18 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with: { terraform_version: '1.5.7' }
-      - name: Init & validate examples/dev
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate example/dev
         run: |
-          terraform -chdir=modules/s3_bucket/examples/dev init   -backend=false
+          terraform -chdir=modules/s3_bucket/examples/dev init -backend=false
           terraform -chdir=modules/s3_bucket/examples/dev validate
       - name: Init & validate module root
         run: |
-          terraform -chdir=modules/s3_bucket init   -backend=false
+          terraform -chdir=modules/s3_bucket init -backend=false
           terraform -chdir=modules/s3_bucket validate
 
-  # 5) terraform validate → modules/ssm_parameter
+  # 5) init & validate → ssm_parameter
   validate-ssm:
     name: ✅ validate → ssm_parameter
     needs: fmt-ssm
@@ -93,17 +96,18 @@ jobs:
       - uses: actions/checkout@v3
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v2
-        with: { terraform_version: '1.5.7' }
-      - name: Init & validate examples/dev
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate example/dev
         run: |
-          terraform -chdir=modules/ssm_parameter/examples/dev init   -backend=false
+          terraform -chdir=modules/ssm_parameter/examples/dev init -backend=false
           terraform -chdir=modules/ssm_parameter/examples/dev validate
       - name: Init & validate module root
         run: |
-          terraform -chdir=modules/ssm_parameter init   -backend=false
+          terraform -chdir=modules/ssm_parameter init -backend=false
           terraform -chdir=modules/ssm_parameter validate
 
-  # 6) TFLint → modules/s3_bucket
+  # 6) TFLint → s3_bucket
   lint-s3:
     name: 🔍 TFLint → s3_bucket
     needs: validate-s3
@@ -116,7 +120,7 @@ jobs:
       - name: TFLint (module root)
         run: tflint --chdir=modules/s3_bucket --init
 
-  # 7) TFLint → modules/ssm_parameter
+  # 7) TFLint → ssm_parameter
   lint-ssm:
     name: 🔍 TFLint → ssm_parameter
     needs: validate-ssm
@@ -129,7 +133,7 @@ jobs:
       - name: TFLint (module root)
         run: tflint --chdir=modules/ssm_parameter --init
 
-  # 8) tfsec → modules/s3_bucket
+  # 8) tfsec → s3_bucket
   tfsec-s3:
     name: 🔒 tfsec → s3_bucket
     needs: lint-s3
@@ -143,7 +147,7 @@ jobs:
           working_directory: modules/s3_bucket
           soft_fail: true
 
-  # 9) tfsec → modules/ssm_parameter
+  # 9) tfsec → ssm_parameter
   tfsec-ssm:
     name: 🔒 tfsec → ssm_parameter
     needs: lint-ssm
