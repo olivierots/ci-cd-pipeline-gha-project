@@ -7,8 +7,12 @@ on:
 
 jobs:
   filter:
-    name: Debug Paths Filter
+    name: 🔀 Path filter
     runs-on: ubuntu-latest
+    outputs:
+      s3: ${{ steps.filter.outputs.s3 }}
+      ssm: ${{ steps.filter.outputs.ssm }}
+      other: ${{ steps.filter.outputs.unmatched }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -16,27 +20,22 @@ jobs:
       - id: filter
         uses: dorny/paths-filter@v2
         with:
-          write-to-files: true
+          list-files: 'matched' # Output the matched files for debugging
           filters: |
             s3:
-              - 'modules/s3_bucket/**'
+              - 'modules/s3_bucket/**' # Match all files under s3_bucket
             ssm:
-              - 'modules/ssm_parameter/**'
+              - 'modules/ssm_parameter/**' # Match all files under ssm_parameter
             unmatched:
-              - '**'
-              - '!modules/s3_bucket/**'
-              - '!modules/ssm_parameter/**'
+              - '**' # Match everything
+              - '!modules/s3_bucket/**' # Exclude s3_bucket files
+              - '!modules/ssm_parameter/**' # Exclude ssm_parameter files
 
-      - name: Inspect matched files
+      - name: Debug filter outputs
         run: |
           echo "Matched files for s3:"
-          cat ${{ steps.filter.outputs.s3_files }}
+          echo "${{ steps.filter.outputs.s3 }}"
           echo "Matched files for ssm:"
-          cat ${{ steps.filter.outputs.ssm_files }}
+          echo "${{ steps.filter.outputs.ssm }}"
           echo "Matched files for unmatched:"
-          cat ${{ steps.filter.outputs.unmatched_files }}
-
-      - name: Debug Git Info
-        run: |
-         git rev-parse --abbrev-ref HEAD
-         git log -1
+          echo "${{ steps.filter.outputs.unmatched }}"
