@@ -27,7 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - id: filter
-        uses: dorny/paths-filter@v2
+        uses: dorny/paths-filter@v3
         with:
           write-to-files: true # Write matched files to outputs
           filters: |
