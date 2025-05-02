@@ -20,10 +20,8 @@ jobs:
       ssm: ${{ steps.filter.outputs.ssm }}
       other: ${{ steps.filter.outputs.unmatched }}
     steps:
-      - name: Checkout full history
+      - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0 # Ensure full history is fetched for accurate change detection
 
       - id: filter
         uses: dorny/paths-filter@v2
@@ -40,13 +38,10 @@ jobs:
 
       - name: Debug filter outputs
         run: |
-          echo "Matched files for s3:"
-          echo "${{ steps.filter.outputs.s3 }}"
-          echo "Matched files for ssm:"
-          echo "${{ steps.filter.outputs.ssm }}"
-          echo "Matched files for unmatched:"
-          echo "${{ steps.filter.outputs.unmatched }}"
-
+          echo "Matched files for s3: ${{ steps.filter.outputs.s3 }}"
+          echo "Matched files for ssm: ${{ steps.filter.outputs.ssm }}"
+          echo "Matched files for unmatched: ${{ steps.filter.outputs.unmatched }}"
+          
   # 2) fmt → s3_bucket
   fmt-s3:
     name: 🖨️ fmt → s3_bucket
