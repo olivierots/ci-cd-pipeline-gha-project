@@ -88,8 +88,8 @@ jobs:
           terraform validate
       - name: Init & validate module (s3_bucket)
         run: |
-          terraform init -backend=false modules/s3_bucket
-          terraform validate modules/s3_bucket
+          terraform -chdir=modules/s3_bucket init -backend=false
+          terraform -chdir=modules/s3_bucket validate
 
   # 5) validate → ssm_parameter
   validate-ssm:
@@ -110,8 +110,8 @@ jobs:
           terraform validate
       - name: Init & validate module (ssm_parameter)
         run: |
-          terraform init -backend=false modules/ssm_parameter
-          terraform validate modules/ssm_parameter
+          terraform -chdir=modules/ssm_parameter init -backend=false
+          terraform -chdir=modules/ssm_parameter validate
 
   # 6) lint → s3_bucket
   lint-s3:
