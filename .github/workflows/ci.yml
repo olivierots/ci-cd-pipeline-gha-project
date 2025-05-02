@@ -29,14 +29,14 @@ jobs:
       - id: filter
         uses: dorny/paths-filter@v3
         with:
-          write-to-files: true # Write matched files to outputs
+          write-to-files: true # still testing
           filters: |
             modules:
               - 'modules/**'
             examples:
               - 'examples/dev/**'
             unmatched:
-              - '**'               # Matches everything not covered by the above filters
+              - '**'               # Matches everything else other than modules and examples
               - '!modules/**'      # Exclude any modules changes
               - '!examples/dev/**' # Exclude any examples/dev changes
               - '!README.md'       # Exclude README.md in the root directory
