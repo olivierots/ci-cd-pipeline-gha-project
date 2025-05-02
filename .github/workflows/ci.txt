@@ -1,6 +1,7 @@
 # .github/workflows/ci.yml
 name: Terraform CI
 
+# Trigger on any PR or push so we can detect changed paths
 on:
   pull_request:
     types: [opened, reopened, synchronize]
@@ -16,8 +17,8 @@ jobs:
     name: 🔀 Path filter
     runs-on: ubuntu-latest
     outputs:
-      s3: ${{ steps.filter.outputs.s3 }}
-      ssm: ${{ steps.filter.outputs.ssm }}
+      s3:    ${{ steps.filter.outputs.s3 }}
+      ssm:   ${{ steps.filter.outputs.ssm }}
       other: ${{ steps.filter.outputs.other }}
     steps:
       - name: Checkout full history
@@ -43,7 +44,7 @@ jobs:
     name: 🖨️ fmt → s3_bucket
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.s3 == 'true'
+    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
     steps:
       - uses: actions/checkout@v3
       - name: Setup Terraform
@@ -58,7 +59,7 @@ jobs:
     name: 🖨️ fmt → ssm_parameter
     needs: filter
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.ssm == 'true'
+    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
     steps:
       - uses: actions/checkout@v3
       - name: Setup Terraform
@@ -73,7 +74,7 @@ jobs:
     name: ✅ validate → s3_bucket
     needs: fmt-s3
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.s3 == 'true'
+    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
     steps:
       - uses: actions/checkout@v3
       - name: Setup Terraform
@@ -95,7 +96,7 @@ jobs:
     name: ✅ validate → ssm_parameter
     needs: fmt-ssm
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.ssm == 'true'
+    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
     steps:
       - uses: actions/checkout@v3
       - name: Setup Terraform
@@ -117,7 +118,7 @@ jobs:
     name: 🔍 TFLint → s3_bucket
     needs: validate-s3
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.s3 == 'true'
+    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
     steps:
       - uses: actions/checkout@v3
       - name: Install TFLint
@@ -131,7 +132,7 @@ jobs:
     name: 🔍 TFLint → ssm_parameter
     needs: validate-ssm
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.ssm == 'true'
+    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
     steps:
       - uses: actions/checkout@v3
       - name: Install TFLint
@@ -145,7 +146,7 @@ jobs:
     name: 🔒 tfsec → s3_bucket
     needs: lint-s3
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.s3 == 'true'
+    if: needs.filter.outputs.s3 == 'true' || needs.filter.outputs.other == 'true'
     steps:
       - uses: actions/checkout@v3
       - name: tfsec (s3_bucket)
@@ -159,7 +160,7 @@ jobs:
     name: 🔒 tfsec → ssm_parameter
     needs: lint-ssm
     runs-on: ubuntu-latest
-    if: needs.filter.outputs.ssm == 'true'
+    if: needs.filter.outputs.ssm == 'true' || needs.filter.outputs.other == 'true'
     steps:
       - uses: actions/checkout@v3
       - name: tfsec (ssm_parameter)
