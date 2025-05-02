@@ -39,6 +39,11 @@ jobs:
           echo "Matched files for ssm: ${{ steps.filter.outputs.ssm }}"
           echo "Matched files for unmatched: ${{ steps.filter.outputs.unmatched }}"
 
-      - name: Debug Git Diff
+      - name: Debug matched files
         run: |
-          git diff --name-status refs/remotes/origin/main...refs/remotes/origin/test-ci-workflow
+          echo "Matched files for s3:"
+          echo "${{ steps.filter.outputs.s3_files }}"
+          echo "Matched files for ssm:"
+          echo "${{ steps.filter.outputs.ssm_files }}"
+          echo "Matched files for unmatched:"
+          echo "${{ steps.filter.outputs.unmatched_files }}"
