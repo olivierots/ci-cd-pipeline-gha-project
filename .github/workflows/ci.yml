@@ -30,9 +30,9 @@ jobs:
         with:
           filters: |
             s3:
-              - 'modules/s3_bucket/**'
+              - 'modules/s3_bucket/**' # Match all files under s3_bucket
             ssm:
-              - 'modules/ssm_parameter/**'
+              - 'modules/ssm_parameter/**' # Match all files under ssm_parameter
             other:
               - '**'
               - '!modules/s3_bucket/**'
