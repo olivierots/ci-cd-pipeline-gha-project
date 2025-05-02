@@ -38,3 +38,7 @@ jobs:
           echo "${{ steps.filter.outputs.ssm }}"
           echo "Matched files for unmatched:"
           echo "${{ steps.filter.outputs.unmatched }}"
+        
+      - name: Debug Git Diff
+        run: |
+         git diff --name-status refs/remotes/origin/main...refs/remotes/origin/feature/olivier
