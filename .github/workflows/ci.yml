@@ -1,0 +1,46 @@
+# .github/workflows/ci.yml
+name: Terraform CI — Filter Debug
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - '**'
+  push:
+    paths:
+      - '**'
+
+jobs:
+    filter:
+        name: 🔀 Path filter
+        runs-on: ubuntu-latest
+        outputs:
+          s3_bucket:    ${{ steps.filter.outputs.s3_bucket }}
+          ssm_parameter: ${{ steps.filter.outputs.ssm_parameter }}
+          other:        ${{ steps.filter.outputs.other }}
+        steps:
+          - name: Checkout full history
+            uses: actions/checkout@v3
+            with:
+              fetch-depth: 0
+    
+          - id: filter
+            # switch to v3, and use the exact module directory names as keys
+            uses: dorny/paths-filter@v3
+            with:
+              filters: |
+                s3_bucket:
+                  - 'modules/s3_bucket/**'
+                ssm_parameter:
+                  - 'modules/ssm_parameter/**'
+                other:
+                  - '**'
+                  - '!modules/s3_bucket/**'
+                  - '!modules/ssm_parameter/**'
+    
+          - name: Debug filter outputs
+            run: |
+              echo "→ s3_bucket changed?    ${{ steps.filter.outputs.s3_bucket }}"
+              echo "→ ssm_parameter changed? ${{ steps.filter.outputs.ssm_parameter }}"
+              echo "→ anything else?         ${{ steps.filter.outputs.other }}"
+    
