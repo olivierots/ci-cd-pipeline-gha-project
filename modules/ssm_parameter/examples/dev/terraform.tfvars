@@ -5,4 +5,4 @@ tags = {
   Environment = "dev"
   Project     = "ssm-module-demo"
   Owner       = "Olivierots"
-}# Test change
+} # Test change
