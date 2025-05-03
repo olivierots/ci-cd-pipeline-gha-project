@@ -53,6 +53,7 @@ jobs:
               - '**'
               - '!modules/s3_bucket/**'
               - '!modules/ssm_parameter/**'
+              - '!.github/workflows/**'
 
       - name: Debug outputs
         run: |
