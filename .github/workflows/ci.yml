@@ -1,5 +1,5 @@
 # .github/workflows/ci.yml
-name: Terraform CI
+name: Terraform CI — Filter Debug
 
 on:
   pull_request:
@@ -11,175 +11,40 @@ on:
       - '**'
 
 jobs:
-  # 1) Detect which module(s) changed
   filter:
-    name: 🔀 Path filter
+    name: 🔀 Path filter (debug only)
     runs-on: ubuntu-latest
     outputs:
-      s3:  ${{ steps.f.outputs.s3 }}
-      ssm: ${{ steps.f.outputs.ssm }}
+      s3:    ${{ steps.filter.outputs.s3 }}
+      ssm:   ${{ steps.filter.outputs.ssm }}
+      other: ${{ steps.filter.outputs.other }}
     steps:
       - name: Checkout full history
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - id: f
-        uses: dorny/paths-filter@v3
+      - name: Run paths-filter
+        id: filter
+        uses: dorny/paths-filter@v2
         with:
           filters: |
             s3:
               - 'modules/s3_bucket/**'
             ssm:
               - 'modules/ssm_parameter/**'
+            other:
+              - '**'
+              - '!modules/s3_bucket/**'
+              - '!modules/ssm_parameter/**'
+
+      - name: List all changed files
+        run: |
+          echo "Changed files:"
+          git diff --name-only ${{ github.event.before }} ${{ github.sha }}
 
       - name: Debug filter outputs
         run: |
-          echo "s3 changed:  ${{ steps.f.outputs.s3 }}"
-          echo "ssm changed: ${{ steps.f.outputs.ssm }}"
-
-  # 2) terraform fmt → modules/s3_bucket
-  fmt-s3:
-    name: 🖨️ fmt → s3_bucket
-    needs: filter
-    runs-on: ubuntu-latest
-    if: >
-      needs.filter.outputs.s3 == 'true' ||
-      (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: terraform fmt (modules/s3_bucket)
-        run: terraform fmt -check -recursive modules/s3_bucket
-
-  # 3) terraform fmt → modules/ssm_parameter
-  fmt-ssm:
-    name: 🖨️ fmt → ssm_parameter
-    needs: filter
-    runs-on: ubuntu-latest
-    if: >
-      needs.filter.outputs.ssm == 'true' ||
-      (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: terraform fmt (modules/ssm_parameter)
-        run: terraform fmt -check -recursive modules/ssm_parameter
-
-  # 4) terraform validate → modules/s3_bucket
-  validate-s3:
-    name: ✅ validate → s3_bucket
-    needs: fmt-s3
-    runs-on: ubuntu-latest
-    if: >
-      needs.filter.outputs.s3 == 'true' ||
-      (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: Init & validate example (s3_bucket)
-        run: |
-          terraform -chdir=modules/s3_bucket/examples/dev init -backend=false
-          terraform -chdir=modules/s3_bucket/examples/dev validate
-      - name: Init & validate module (s3_bucket)
-        run: |
-          terraform -chdir=modules/s3_bucket init -backend=false
-          terraform -chdir=modules/s3_bucket validate
-
-  # 5) terraform validate → modules/ssm_parameter
-  validate-ssm:
-    name: ✅ validate → ssm_parameter
-    needs: fmt-ssm
-    runs-on: ubuntu-latest
-    if: >
-      needs.filter.outputs.ssm == 'true' ||
-      (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: Init & validate example (ssm_parameter)
-        run: |
-          terraform -chdir=modules/ssm_parameter/examples/dev init -backend=false
-          terraform -chdir=modules/ssm_parameter/examples/dev validate
-      - name: Init & validate module (ssm_parameter)
-        run: |
-          terraform -chdir=modules/ssm_parameter init -backend=false
-          terraform -chdir=modules/ssm_parameter validate
-
-  # 6) TFLint → modules/s3_bucket
-  lint-s3:
-    name: 🔍 TFLint → s3_bucket
-    needs: validate-s3
-    runs-on: ubuntu-latest
-    if: >
-      needs.filter.outputs.s3 == 'true' ||
-      (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v1
-        with:
-          version: latest
-      - name: tflint (modules/s3_bucket)
-        run: tflint --chdir=modules/s3_bucket --init
-
-  # 7) TFLint → modules/ssm_parameter
-  lint-ssm:
-    name: 🔍 TFLint → ssm_parameter
-    needs: validate-ssm
-    runs-on: ubuntu-latest
-    if: >
-      needs.filter.outputs.ssm == 'true' ||
-      (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup TFLint
-        uses: terraform-linters/setup-tflint@v1
-        with:
-          version: latest
-      - name: tflint (modules/ssm_parameter)
-        run: tflint --chdir=modules/ssm_parameter --init
-
-  # 8) tfsec → modules/s3_bucket
-  tfsec-s3:
-    name: 🔒 tfsec → s3_bucket
-    needs: lint-s3
-    runs-on: ubuntu-latest
-    if: >
-      needs.filter.outputs.s3 == 'true' ||
-      (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
-    steps:
-      - uses: actions/checkout@v3
-      - name: tfsec (modules/s3_bucket)
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: modules/s3_bucket
-          soft_fail: true
-
-  # 9) tfsec → modules/ssm_parameter
-  tfsec-ssm:
-    name: 🔒 tfsec → ssm_parameter
-    needs: lint-ssm
-    runs-on: ubuntu-latest
-    if: >
-      needs.filter.outputs.ssm == 'true' ||
-      (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
-    steps:
-      - uses: actions/checkout@v3
-      - name: tfsec (modules/ssm_parameter)
-        uses: aquasecurity/tfsec-action@v1.0.3
-        with:
-          working_directory: modules/ssm_parameter
-          soft_fail: true
+          echo "→ s3_bucket changed?   ${{ steps.filter.outputs.s3 }}"
+          echo "→ ssm_parameter changed? ${{ steps.filter.outputs.ssm }}"
+          echo "→ other patterns?       ${{ steps.filter.outputs.other }}"
