@@ -1,0 +1,78 @@
+# .github/workflows/ci-filter-debug.yml
+name: 🚦 Filter Debug
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - '**'
+  push:
+    paths:
+      - '**'
+
+jobs:
+  # 1) Detect which part changed
+  detect:
+    name: 🔀 What changed?
+    runs-on: ubuntu-latest
+    outputs:
+      s3_bucket:     ${{ steps.filter.outputs.s3_bucket }}
+      ssm_parameter: ${{ steps.filter.outputs.ssm_parameter }}
+      other:         ${{ steps.filter.outputs.other }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Run paths-filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          base: main
+          filters: |
+            s3_bucket:
+              - 'modules/s3_bucket/**'
+            ssm_parameter:
+              - 'modules/ssm_parameter/**'
+            other:
+              - '**'
+              - '!modules/s3_bucket/**'
+              - '!modules/ssm_parameter/**'
+
+      - name: Debug outputs
+        run: |
+          echo "→ s3_bucket changed?     ${{ steps.filter.outputs.s3_bucket }}"
+          echo "→ ssm_parameter changed?  ${{ steps.filter.outputs.ssm_parameter }}"
+          echo "→ other changed?         ${{ steps.filter.outputs.other }}"
+
+      - name: Debug Git Diff
+        run: |
+            git diff --name-status refs/remotes/origin/main...refs/remotes/origin/${{ github.head_ref }}
+
+  # 2) Only run when S3 module changed
+  run-s3-ci:
+    name: 🖨️ S3-module CI
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.s3_bucket == 'true'
+    steps:
+      - run: echo "👷‍♂️ Running S3 module CI…"
+
+  # 3) Only run when SSM module changed
+  run-ssm-ci:
+    name: 🖥️ SSM-module CI
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.ssm_parameter == 'true'
+    steps:
+      - run: echo "🔧 Running SSM module CI…"
+
+  # 4) Full CI for any “other” changes
+  run-full-ci:
+    name: 🚀 Full CI
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.other == 'true'
+    steps:
+      - run: echo "⚙️  Running Full CI (docs, scripts, config)…"

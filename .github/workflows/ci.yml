@@ -1,0 +1,61 @@
+# .github/workflows/ci-filter-debug.yml
+name: 🚦 Filter Debug
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+    paths:
+      - '**'
+  push:
+    paths:
+      - '**'
+
+jobs:
+  detect:
+    name: 🔀 What changed?
+    runs-on: ubuntu-latest
+    outputs:
+      s3_bucket: ${{ steps.filter.outputs.s3_bucket }}
+      ssm_parameter: ${{ steps.filter.outputs.ssm_parameter }}
+      other: ${{ steps.filter.outputs.other }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Debug Git Diff
+        run: |
+          # Determine the base and head references
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            BASE_REF="refs/remotes/origin/main"
+            HEAD_REF="refs/remotes/origin/${{ github.head_ref }}"
+          else
+            BASE_REF="refs/remotes/origin/main"
+            HEAD_REF="refs/remotes/origin/${{ github.ref_name }}"
+          fi
+
+          # Print the Git diff
+          echo "Comparing $BASE_REF...$HEAD_REF"
+          git diff --name-status $BASE_REF...$HEAD_REF
+
+      - name: Run paths-filter
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          base: main
+          filters: |
+            s3_bucket:
+              - 'modules/s3_bucket/**'
+            ssm_parameter:
+              - 'modules/ssm_parameter/**'
+            other:
+              - '**'
+              - '!modules/s3_bucket/**'
+              - '!modules/ssm_parameter/**'
+
+      - name: Debug outputs
+        run: |
+          echo "→ s3_bucket changed?     ${{ steps.filter.outputs.s3_bucket }}"
+          echo "→ ssm_parameter changed?  ${{ steps.filter.outputs.ssm_parameter }}"
+          echo "→ other changed?         ${{ steps.filter.outputs.other }}"
