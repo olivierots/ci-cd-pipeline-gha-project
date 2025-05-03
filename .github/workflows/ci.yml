@@ -38,10 +38,6 @@ jobs:
           echo "s3 changed:  ${{ steps.f.outputs.s3 }}"
           echo "ssm changed: ${{ steps.f.outputs.ssm }}"
 
-  # Helper boolean: did *neither* module change?
-  # (GitHub doesn't let us define reusable booleans,
-  # so we'll inline the check in each job's `if:`.)
-
   # 2) terraform fmt → modules/s3_bucket
   fmt-s3:
     name: 🖨️ fmt → s3_bucket
@@ -132,9 +128,10 @@ jobs:
       (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
     steps:
       - uses: actions/checkout@v3
-      - name: Install TFLint
-        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh \|
-               bash
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v1
+        with:
+          version: latest
       - name: tflint (modules/s3_bucket)
         run: tflint --chdir=modules/s3_bucket --init
 
@@ -148,9 +145,10 @@ jobs:
       (needs.filter.outputs.s3 == 'false' && needs.filter.outputs.ssm == 'false')
     steps:
       - uses: actions/checkout@v3
-      - name: Install TFLint
-        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh \|
-               bash
+      - name: Setup TFLint
+        uses: terraform-linters/setup-tflint@v1
+        with:
+          version: latest
       - name: tflint (modules/ssm_parameter)
         run: tflint --chdir=modules/ssm_parameter --init
 
