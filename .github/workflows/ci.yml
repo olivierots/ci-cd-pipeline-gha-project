@@ -57,6 +57,7 @@ jobs:
             echo "other=true" >> $GITHUB_OUTPUT
           else
             echo "other=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Debug outputs
         run: |
