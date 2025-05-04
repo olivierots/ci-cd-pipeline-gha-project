@@ -11,9 +11,9 @@ jobs:
     permissions:
       pull-requests: read         # needed so paths-filter can call the API
     outputs:
-      s3_bucket:    ${{ steps.detect.outputs.s3_bucket }}
+      s3_bucket: ${{ steps.detect.outputs.s3_bucket }}
       ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}
-      other:        ${{ steps.detect.outputs.other }}
+      other: ${{ steps.determine_other.outputs.other }}
       
     steps:
       - name: Checkout code
@@ -28,22 +28,18 @@ jobs:
               - 'modules/s3_bucket/**'
             ssm_parameter:
               - 'modules/ssm_parameter/**'
-            other:
-              - '**'
-              - '!modules/s3_bucket/**'
-              - '!modules/ssm_parameter/**'
 
-      - name: Debug matched files
+      - name: Determine if 'other' changed
+        id: determine_other
         run: |
-          echo "Matched files for s3_bucket:"
-          echo "${{ steps.detect.outputs.s3_bucket_files }}"
-          echo "Matched files for ssm_parameter:"
-          echo "${{ steps.detect.outputs.ssm_parameter_files }}"
-          echo "Matched files for other:"
-          echo "${{ steps.detect.outputs.other_files }}"
+          if [[ "${{ steps.detect.outputs.s3_bucket }}" == "false" && "${{ steps.detect.outputs.ssm_parameter }}" == "false" ]]; then
+            echo "other=true" >> $GITHUB_OUTPUT
+          else
+            echo "other=false" >> $GITHUB_OUTPUT
+          fi
 
-      - name: Report
+      - name: Debug outputs
         run: |
-          echo "→ modules/s3_bucket changed?     ${{ steps.detect.outputs.s3_bucket }}"
-          echo "→ modules/ssm_parameter changed?  ${{ steps.detect.outputs.ssm_parameter }}"
-          echo "→ everything else (full CI)?      ${{ steps.detect.outputs.other }}"
+          echo "→ s3_bucket changed?     ${{ steps.detect.outputs.s3_bucket }}"
+          echo "→ ssm_parameter changed?  ${{ steps.detect.outputs.ssm_parameter }}"
+          echo "→ other changed?         ${{ steps.determine_other.outputs.other }}"
