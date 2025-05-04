@@ -1,50 +1,58 @@
 name: Terraform CI — Change Detector
 
+# Run on any PR or push so we can compare against main
 on:
   pull_request:
     types: [opened, reopened, synchronize]
+  push:
 
 jobs:
-  filter:
-    name: 🔀 Detect what changed in this PR
+  detect:
+    name: 🔀 What changed?
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read         # needed so paths-filter can call the API
     outputs:
-      s3_bucket: ${{ steps.detect.outputs.s3_bucket }}
+      s3_bucket:    ${{ steps.detect.outputs.s3_bucket }}
       ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}
-      other: ${{ steps.determine_other.outputs.other }}
-      
+      other:        ${{ steps.detect.outputs.other }}
     steps:
-      - name: Checkout code
+      - name: Checkout code (full history)
         uses: actions/checkout@v3
-
-      - name: Detect changes
-        id: detect
-        uses: dorny/paths-filter@v3
         with:
-          filters: |
-            s3_bucket:
-              - 'modules/s3_bucket/**'
-            ssm_parameter:
-              - 'modules/ssm_parameter/**'
-            other:
-              - '**'
-              - '!modules/s3_bucket/**'
-              - '!modules/ssm_parameter/**'
-              - '.github/**' # Include .github directory in the 'other' filter
+          fetch-depth: 0
 
-      - name: Determine if 'other' changed
-        id: determine_other
+      - name: Detect changes vs main
+        id: detect
+        shell: bash
         run: |
-          if [[ "${{ steps.detect.outputs.s3_bucket }}" == "false" && "${{ steps.detect.outputs.ssm_parameter }}" == "false" ]]; then
-            echo "other=true" >> $GITHUB_OUTPUT
-          else
-            echo "other=false" >> $GITHUB_OUTPUT
+          # fetch main so we can diff
+          git fetch origin main
+          
+          # get changed files
+          files=$(git diff --name-only origin/main...HEAD)
+
+          # initialize flags
+          s3=false
+          ssm=false
+
+          # mark flags if any path matches
+          for f in $files; do
+            [[ $f == modules/s3_bucket/*    ]] && s3=true
+            [[ $f == modules/ssm_parameter/* ]] && ssm=true
+          done
+
+          # "other" is true when neither module changed
+          other=false
+          if [[ $s3 == "false" && $ssm == "false" ]]; then
+            other=true
           fi
 
-      - name: Debug outputs
+          # expose outputs
+          echo "s3_bucket=$s3"    >> $GITHUB_OUTPUT
+          echo "ssm_parameter=$ssm" >> $GITHUB_OUTPUT
+          echo "other=$other"      >> $GITHUB_OUTPUT
+
+      - name: Show results
         run: |
-          echo "→ s3_bucket changed?     ${{ steps.detect.outputs.s3_bucket }}"
-          echo "→ ssm_parameter changed?  ${{ steps.detect.outputs.ssm_parameter }}"
-          echo "→ other changed?         ${{ steps.determine_other.outputs.other }}"
+          echo "→ modules/s3_bucket changed?    ${{ steps.detect.outputs.s3_bucket }}"
+          echo "→ modules/ssm_parameter changed? ${{ steps.detect.outputs.ssm_parameter }}"
+          echo "→ run full CI?                  ${{ steps.detect.outputs.other }}"
