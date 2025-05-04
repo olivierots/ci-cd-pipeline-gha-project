@@ -28,6 +28,11 @@ jobs:
               - 'modules/s3_bucket/**'
             ssm_parameter:
               - 'modules/ssm_parameter/**'
+            other:
+              - '**'
+              - '!modules/s3_bucket/**'
+              - '!modules/ssm_parameter/**'
+              - '.github/**' # Include .github directory in the 'other' filter
 
       - name: Determine if 'other' changed
         id: determine_other
