@@ -25,36 +25,45 @@ jobs:
         id: detect
         shell: bash
         run: |
-          git fetch origin main
-          files=$(git diff --name-only origin/main...HEAD)
-
-          s3=false; ssm=false; other=false
-          for f in $files; do
-            [[ $f == modules/s3_bucket/*    ]] && s3=true
-            [[ $f == modules/ssm_parameter/* ]] && ssm=true
-            [[ $f != modules/s3_bucket/* && $f != modules/ssm_parameter/* ]] && other=true
-          done
-
-          other=false
-          if [[ $s3 == "false" && $ssm == "false" ]]; then
-            other=true
-          fi
-
-          echo "s3_bucket=$s3"     >> $GITHUB_OUTPUT
-          echo "ssm_parameter=$ssm" >> $GITHUB_OUTPUT
-          echo "other=$other"       >> $GITHUB_OUTPUT
-
+            git fetch origin main
+            files=$(git diff --name-only origin/main...HEAD)
+  
+            # start all flags false
+            s3=false; ssm=false; other=false
+  
+            # inspect each changed file
+            for f in $files; do
+              [[ $f == modules/s3_bucket/*    ]] && s3=true
+              [[ $f == modules/ssm_parameter/* ]] && ssm=true
+              # anything _not_ in either module is an outside change:
+              [[ $f != modules/s3_bucket/* && $f != modules/ssm_parameter/* ]] && other=true
+            done
+  
+            # if no modules changed but some outside did, we still want full CI
+            # (you can drop this if you want ANY outside edit to trigger full CI
+            # even when modules also changed; or leave it as-is)
+            if [[ $s3 == "false" && $ssm == "false" && $other == "true" ]]; then
+              full_ci=true
+            else
+              full_ci=false
+            fi
+  
+            echo "s3_bucket=$s3"      >> $GITHUB_OUTPUT
+            echo "ssm_parameter=$ssm" >> $GITHUB_OUTPUT
+            echo "full_ci=$full_ci"   >> $GITHUB_OUTPUT
+  
       - name: Show results
         run: |
           echo "→ s3_bucket changed?     ${{ steps.detect.outputs.s3_bucket }}"
           echo "→ ssm_parameter changed? ${{ steps.detect.outputs.ssm_parameter }}"
-          echo "→ run full CI?           ${{ steps.detect.outputs.other }}"
+          echo "→ run full CI?           ${{ steps.detect.outputs.full_ci }}"
 
       - name: Debug detected changes
         run: |
-            echo "s3_bucket: ${{ steps.detect.outputs.s3_bucket }}"
-            echo "ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}"
-            echo "other: ${{ steps.detect.outputs.other }}"
+          echo "s3_bucket:    ${{ steps.detect.outputs.s3_bucket }}"
+          echo "ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}"
+          echo "full_ci:       ${{ steps.detect.outputs.full_ci }}"
+
 
   # 2) fmt → modules/s3_bucket
   fmt-s3:
