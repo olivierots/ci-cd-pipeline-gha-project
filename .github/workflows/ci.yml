@@ -1,42 +1,49 @@
 name: Terraform CI — Change Detector
 
-# Trigger on any PR or push so that the pipeline can diff against main
 on:
   pull_request:
     types: [opened, reopened, synchronize]
-  push:
 
 jobs:
   filter:
-    name: 🔀 Detect what changed
+    name: 🔀 Detect what changed in this PR
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read         # needed so paths-filter can call the API
     outputs:
       s3_bucket:    ${{ steps.detect.outputs.s3_bucket }}
-      ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}
+      ssm_parameter:${{ steps.detect.outputs.ssm_parameter }}
+      other:        ${{ steps.detect.outputs.other }}
+      
     steps:
-      - name: Checkout full history
+      - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
-      - name: Diff against main
+      - name: Detect changes
         id: detect
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            s3_bucket:
+              - 'modules/s3_bucket/**'
+            ssm_parameter:
+              - 'modules/ssm_parameter/**'
+            other:
+              - '**'
+              - '!modules/s3_bucket/**'
+              - '!modules/ssm_parameter/**'
+
+      - name: Debug matched files
         run: |
-          git fetch origin main
-          echo "::debug::Diffing origin/main…HEAD"
-          files=$(git diff --name-only origin/main...HEAD)
-          echo "::debug::Changed files:\n$files"
-
-          s3=false; ssm=false
-          for f in $files; do
-            [[ $f == modules/s3_bucket/*    ]] && s3=true
-            [[ $f == modules/ssm_parameter/* ]] && ssm=true
-          done
-
-          echo "s3_bucket=$s3"    >> $GITHUB_OUTPUT
-          echo "ssm_parameter=$ssm" >> $GITHUB_OUTPUT
+          echo "Matched files for s3_bucket:"
+          echo "${{ steps.detect.outputs.s3_bucket_files }}"
+          echo "Matched files for ssm_parameter:"
+          echo "${{ steps.detect.outputs.ssm_parameter_files }}"
+          echo "Matched files for other:"
+          echo "${{ steps.detect.outputs.other_files }}"
 
       - name: Report
         run: |
-          echo "→ modules/s3_bucket changed?    ${{ steps.detect.outputs.s3_bucket }}"
-          echo "→ modules/ssm_parameter changed? ${{ steps.detect.outputs.ssm_parameter }}"
+          echo "→ modules/s3_bucket changed?     ${{ steps.detect.outputs.s3_bucket }}"
+          echo "→ modules/ssm_parameter changed?  ${{ steps.detect.outputs.ssm_parameter }}"
+          echo "→ everything else (full CI)?      ${{ steps.detect.outputs.other }}"
