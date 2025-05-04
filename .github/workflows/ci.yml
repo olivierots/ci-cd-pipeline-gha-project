@@ -12,7 +12,7 @@ jobs:
       pull-requests: read         # needed so paths-filter can call the API
     outputs:
       s3_bucket:    ${{ steps.detect.outputs.s3_bucket }}
-      ssm_parameter:${{ steps.detect.outputs.ssm_parameter }}
+      ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}
       other:        ${{ steps.detect.outputs.other }}
       
     steps:
