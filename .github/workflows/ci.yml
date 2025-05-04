@@ -16,7 +16,7 @@ jobs:
     outputs:
       s3_bucket: ${{ steps.filter.outputs.s3_bucket }}
       ssm_parameter: ${{ steps.filter.outputs.ssm_parameter }}
-      other: ${{ steps.filter.outputs.other }}
+      other: ${{ steps.determine_other.outputs.other }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -49,23 +49,17 @@ jobs:
               - 'modules/s3_bucket/**'
             ssm_parameter:
               - 'modules/ssm_parameter/**'
-            other:
-              - '**'
-              - '!modules/s3_bucket/**'
-              - '!modules/ssm_parameter/**'
-              - '!.github/workflows/**'
+
+      - name: Determine if 'other' changed
+        id: determine_other
+        run: |
+          if [[ "${{ steps.filter.outputs.s3_bucket }}" == "false" && "${{ steps.filter.outputs.ssm_parameter }}" == "false" ]]; then
+            echo "other=true" >> $GITHUB_OUTPUT
+          else
+            echo "other=false" >> $GITHUB_OUTPUT
 
       - name: Debug outputs
         run: |
           echo "→ s3_bucket changed?     ${{ steps.filter.outputs.s3_bucket }}"
           echo "→ ssm_parameter changed?  ${{ steps.filter.outputs.ssm_parameter }}"
-          echo "→ other changed?         ${{ steps.filter.outputs.other }}"
-
-      - name: Debug matched files
-        run: |
-          echo "Matched files for s3_bucket:"
-          echo "${{ steps.filter.outputs.s3_bucket_files }}"
-          echo "Matched files for ssm_parameter:"
-          echo "${{ steps.filter.outputs.ssm_parameter_files }}"
-          echo "Matched files for other:"
-          echo "${{ steps.filter.outputs.other_files }}"
+          echo "→ other changed?         ${{ steps.determine_other.outputs.other }}"
