@@ -32,6 +32,7 @@ jobs:
           for f in $files; do
             [[ $f == modules/s3_bucket/*    ]] && s3=true
             [[ $f == modules/ssm_parameter/* ]] && ssm=true
+            [[ $f != modules/s3_bucket/* && $f != modules/ssm_parameter/* ]] && other=true
           done
 
           other=false
