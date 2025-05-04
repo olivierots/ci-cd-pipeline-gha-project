@@ -14,7 +14,7 @@ jobs:
     outputs:
       s3_bucket:     ${{ steps.detect.outputs.s3_bucket }}
       ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}
-      full_ci:       ${{ steps.detect.outputs.other }}
+      full_ci:       ${{ steps.detect.outputs.full_ci }}
     steps:
       - name: Checkout code (full history)
         uses: actions/checkout@v3
