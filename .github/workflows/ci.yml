@@ -28,7 +28,7 @@ jobs:
           git fetch origin main
           files=$(git diff --name-only origin/main...HEAD)
 
-          s3=false; ssm=false
+          s3=false; ssm=false; other=false
           for f in $files; do
             [[ $f == modules/s3_bucket/*    ]] && s3=true
             [[ $f == modules/ssm_parameter/* ]] && ssm=true
