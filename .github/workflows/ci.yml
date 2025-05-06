@@ -16,7 +16,7 @@ jobs:
     outputs:
       s3_bucket:        ${{ steps.detect.outputs.s3 }}
       ssm_parameter:    ${{ steps.detect.outputs.ssm }}
-      simple_sqs_queue: ${{ steps.detect.outputs.sqs }}
+      sqs:              ${{ steps.detect.outputs.sqs }}
       full_ci:          ${{ steps.detect.outputs.full_ci }}
     steps:
       - name: Checkout full history
