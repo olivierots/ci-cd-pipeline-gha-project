@@ -11,10 +11,12 @@ jobs:
   detect:
     name: 🔀 What changed?
     runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
     outputs:
       s3_bucket:     ${{ steps.detect.outputs.s3_bucket }}
       ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}
-      full_ci:       ${{ steps.detect.outputs.other }}
+      full_ci:       ${{ steps.detect.outputs.full_ci }}
     steps:
       - name: Checkout code (full history)
         uses: actions/checkout@v3
@@ -25,37 +27,42 @@ jobs:
         id: detect
         shell: bash
         run: |
+          # fetch the main branch so we can diff against it
           git fetch origin main
+
+          # grab all changed paths between main and HEAD
           files=$(git diff --name-only origin/main...HEAD)
 
-          s3=false; ssm=false
+          # start all flags false
+          s3=false; ssm=false; other=false
+
+          # inspect each changed file
           for f in $files; do
             [[ $f == modules/s3_bucket/*    ]] && s3=true
             [[ $f == modules/ssm_parameter/* ]] && ssm=true
+            # anything _not_ in either module is an outside change
+            [[ $f != modules/s3_bucket/* && $f != modules/ssm_parameter/* ]] && other=true
           done
 
-          other=false
-          if [[ $s3 == "false" && $ssm == "false" ]]; then
-            other=true
+          # if no modules changed but some outside did, trigger full CI
+          if [[ $s3 == "false" && $ssm == "false" && $other == "true" ]]; then
+            full_ci=true
+          else
+            full_ci=false
           fi
 
-          echo "s3_bucket=$s3"     >> $GITHUB_OUTPUT
+          # export the results
+          echo "s3_bucket=$s3"      >> $GITHUB_OUTPUT
           echo "ssm_parameter=$ssm" >> $GITHUB_OUTPUT
-          echo "other=$other"       >> $GITHUB_OUTPUT
+          echo "full_ci=$full_ci"   >> $GITHUB_OUTPUT
 
       - name: Show results
         run: |
           echo "→ s3_bucket changed?     ${{ steps.detect.outputs.s3_bucket }}"
           echo "→ ssm_parameter changed? ${{ steps.detect.outputs.ssm_parameter }}"
-          echo "→ run full CI?           ${{ steps.detect.outputs.other }}"
+          echo "→ run full CI?           ${{ steps.detect.outputs.full_ci }}"
 
-      - name: Debug detected changes
-        run: |
-            echo "s3_bucket: ${{ steps.detect.outputs.s3_bucket }}"
-            echo "ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}"
-            echo "other: ${{ steps.detect.outputs.other }}"
-
-  # 2) fmt → modules/s3_bucket
+  # 2) terraform fmt → s3_bucket
   fmt-s3:
     name: 🖨️ fmt → s3_bucket
     needs: detect
@@ -70,7 +77,7 @@ jobs:
       - name: terraform fmt (modules/s3_bucket)
         run: terraform fmt -check -recursive modules/s3_bucket
 
-  # 3) fmt → modules/ssm_parameter
+  # 3) terraform fmt → ssm_parameter
   fmt-ssm:
     name: 🖨️ fmt → ssm_parameter
     needs: detect
@@ -85,7 +92,7 @@ jobs:
       - name: terraform fmt (modules/ssm_parameter)
         run: terraform fmt -check -recursive modules/ssm_parameter
 
-  # 4) validate → modules/s3_bucket
+  # 4) terraform validate → s3_bucket
   validate-s3:
     name: ✅ validate → s3_bucket
     needs: [detect, fmt-s3]
@@ -106,7 +113,7 @@ jobs:
           terraform -chdir=modules/s3_bucket init -backend=false
           terraform -chdir=modules/s3_bucket validate
 
-  # 5) validate → modules/ssm_parameter
+  # 5) terraform validate → ssm_parameter
   validate-ssm:
     name: ✅ validate → ssm_parameter
     needs: [detect, fmt-ssm]
@@ -127,7 +134,7 @@ jobs:
           terraform -chdir=modules/ssm_parameter init -backend=false
           terraform -chdir=modules/ssm_parameter validate
 
-  # 6) lint → modules/s3_bucket
+  # 6) TFLint → s3_bucket
   lint-s3:
     name: 🔍 TFLint → s3_bucket
     needs: validate-s3
@@ -136,11 +143,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install TFLint
-        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
       - name: tflint (modules/s3_bucket)
         run: tflint --chdir=modules/s3_bucket --init
 
-  # 7) lint → modules/ssm_parameter
+  # 7) TFLint → ssm_parameter
   lint-ssm:
     name: 🔍 TFLint → ssm_parameter
     needs: validate-ssm
@@ -149,11 +157,12 @@ jobs:
     steps:
       - uses: actions/checkout@v3
       - name: Install TFLint
-        run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
       - name: tflint (modules/ssm_parameter)
         run: tflint --chdir=modules/ssm_parameter --init
 
-  # 8) tfsec → modules/s3_bucket
+  # 8) tfsec → s3_bucket
   tfsec-s3:
     name: 🔒 tfsec → s3_bucket
     needs: lint-s3
@@ -167,7 +176,7 @@ jobs:
           working_directory: modules/s3_bucket
           soft_fail: true
 
-  # 9) tfsec → modules/ssm_parameter
+  # 9) tfsec → ssm_parameter
   tfsec-ssm:
     name: 🔒 tfsec → ssm_parameter
     needs: lint-ssm

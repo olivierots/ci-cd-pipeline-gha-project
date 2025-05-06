@@ -1,9 +1,9 @@
-A hands-on sandbox for building a **CI/CD pipeline** that uses:
+`A hands-on sandbox for building a **CI/CD pipeline** that uses:`
 
-- **GitHub Actions** for all **Continuous Integration (CI)** tasks—linting, validation, security scanning—on Terraform modules  
+- **GitHub Actions** for all **Continuous Integration (CI)** tasks: linting, validation, security scanning—on Terraform modules  
 - **Harness** for **Continuous Deployment (CD)** to deploy the infrastrucure.
 ---
-# Terraform Modules
+**Terraform Modules**
 * Module: `s3_bucket`
 > **What it does:**  
 > - Provisions a versioned, tagged S3 bucket with a configurable ACL (e.g. `private` or `public-read`).  
