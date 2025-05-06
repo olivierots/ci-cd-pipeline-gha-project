@@ -23,39 +23,33 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Detect changes vs main
-        id: detect
-        shell: bash
-        run: |
-          # fetch the main branch so we can diff against it
-          git fetch origin main
-
-          # grab all changed paths between main and HEAD
-          files=$(git diff --name-only origin/main...HEAD)
-
-          # start all flags false
-          s3=false; ssm=false; other=false
-
-          # inspect each changed file
-          for f in $files; do
-            [[ $f == modules/s3_bucket/*    ]] && s3=true
-            [[ $f == modules/ssm_parameter/* ]] && ssm=true
-            # anything _not_ in either module is an outside change
-            [[ $f != modules/s3_bucket/* && $f != modules/ssm_parameter/* ]] && other=true
-          done
-
-          # if no modules changed but some outside did, trigger full CI
-          if [[ $s3 == "false" && $ssm == "false" && $other == "true" ]]; then
-            full_ci=true
-          else
-            full_ci=false
-          fi
-
-          # export the results
-          echo "s3_bucket=$s3"      >> $GITHUB_OUTPUT
-          echo "ssm_parameter=$ssm" >> $GITHUB_OUTPUT
-          echo "full_ci=$full_ci"   >> $GITHUB_OUTPUT
-
+          - name: Detect changes vs main
+          id: detect
+          shell: bash
+          run: |
+            git fetch origin main
+            files=$(git diff --name-only origin/main...HEAD)
+  
+            s3=false; ssm=false; other=false
+            for f in $files; do
+              [[ $f == modules/s3_bucket/*    ]] && s3=true
+              [[ $f == modules/ssm_parameter/* ]] && ssm=true
+              [[ $f != modules/s3_bucket/* && $f != modules/ssm_parameter/* ]] && other=true
+            done
+  
+            # Force full CI for pushes to main
+            if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+              full_ci=true
+            elif [[ $s3 == "false" && $ssm == "false" && $other == "true" ]]; then
+              full_ci=true
+            else
+              full_ci=false
+            fi
+  
+            echo "s3_bucket=$s3"      >> $GITHUB_OUTPUT
+            echo "ssm_parameter=$ssm" >> $GITHUB_OUTPUT
+            echo "full_ci=$full_ci"   >> $GITHUB_OUTPUT
+            
       - name: Show results
         run: |
           echo "→ s3_bucket changed?     ${{ steps.detect.outputs.s3_bucket }}"
