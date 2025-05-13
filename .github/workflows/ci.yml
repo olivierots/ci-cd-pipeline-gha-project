@@ -42,6 +42,12 @@ jobs:
           else
             echo "full_ci=false" >> $GITHUB_OUTPUT
           fi
+
+      - name: Debug Outputs
+        run: |
+          echo "Modules JSON List: ${{ steps.detect.outputs.modules_json_list }}"
+          echo "Full CI: ${{ steps.detect.outputs.full_ci }}"
+
   # 2) Run CI Tests for Changed Modules
   ci-tests:
     name: Run CI Tests
@@ -58,6 +64,9 @@ jobs:
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: '1.5.7'
+
+      - name: Debug matrix.module_name
+        run: echo "Module name: ${{ matrix.module_name }}"
 
       - name: Run Terraform fmt
         run: terraform fmt -check -recursive modules/${{ matrix.module_name }}
@@ -98,3 +107,6 @@ jobs:
         with:
           overrideConfig: |
             tag-prefix=${{ matrix.module_name }}-
+
+      - name: Debug Module Version
+        run: echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.Determine Version.outputs.MajorMinorPatch }}"
