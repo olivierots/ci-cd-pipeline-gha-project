@@ -60,34 +60,40 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list) }}
+        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Debug matrix.module_name
+        run: 'echo "Module name: ${{ matrix.module_name }}"'
+
+      - name: Skip if no modules
+        if: ${{ matrix.module_name == 'none' }}
+        run: echo "No modules to process. Skipping CI tests."
+
       - name: Setup Terraform
+        if: ${{ matrix.module_name != 'none' }}
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: '1.5.7'
 
-      - name: Debug matrix.module_name
-        run: 'echo "Module name: ${{ matrix.module_name }}"'
-
       - name: Run Terraform fmt
+        if: ${{ matrix.module_name != 'none' }}
         run: terraform fmt -check -recursive modules/${{ matrix.module_name }}
 
       - name: Run Terraform validate
-        if: ${{ matrix.module_name != '' }}
+        if: ${{ matrix.module_name != 'none' }}
         run: |
           terraform -chdir=modules/${{ matrix.module_name }}/examples/dev init -backend=false
           terraform -chdir=modules/${{ matrix.module_name }}/examples/dev validate
 
       - name: Run TFLint
-        if: ${{ matrix.module_name != '' }}
+        if: ${{ matrix.module_name != 'none' }}
         run: tflint --chdir=modules/${{ matrix.module_name }} --init
 
       - name: Run tfsec
-        if: ${{ matrix.module_name != '' }}
+        if: ${{ matrix.module_name != 'none' }}
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
           working_directory: modules/${{ matrix.module_name }}
@@ -100,17 +106,23 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list) }}
+        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
+      - name: Skip if no modules
+        if: ${{ matrix.module_name == 'none' }}
+        run: echo "No modules to process. Skipping versioning."
+
       - name: Install GitVersion
+        if: ${{ matrix.module_name != 'none' }}
         uses: gittools/actions/gitversion/setup@v3.2.1
         with:
           versionSpec: '6.2.x'
 
       - id: determine_version
+        if: ${{ matrix.module_name != 'none' }}
         name: Determine Version
         uses: gittools/actions/gitversion/execute@v3.2.1
         with:
@@ -118,4 +130,5 @@ jobs:
             tag-prefix=${{ matrix.module_name }}-
 
       - name: Debug Module Version
+        if: ${{ matrix.module_name != 'none' }}
         run: 'echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"'
