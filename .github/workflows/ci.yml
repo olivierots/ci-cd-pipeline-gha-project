@@ -41,7 +41,7 @@ jobs:
             echo "full_ci=true" >> $GITHUB_OUTPUT
           else
             echo "full_ci=false" >> $GITHUB_OUTPUT
-
+          fi
   # 2) Run CI Tests for Changed Modules
   ci-tests:
     name: Run CI Tests
