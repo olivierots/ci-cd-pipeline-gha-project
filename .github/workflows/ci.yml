@@ -32,12 +32,31 @@ jobs:
           files=$(git diff --name-only origin/main...HEAD)
 
           # Detect changed modules
-          changed_modules=$(git diff --name-only origin/main...HEAD -- modules | grep -E 'modules/.*/' | cut -d/ -f2 | uniq)
-          if [[ -z "$changed_modules" ]]; then
-            echo "No modules changed."
-            echo "modules_json_list=[]" >> $GITHUB_OUTPUT
+          all_modules=$(ls modules)
+          all_json=$(printf '%s\n' $all_modules \
+                  | jq --raw-input . \
+                  | jq --slurp . \
+                  | jq -c .)
+
+          changed=$(git diff --name-only origin/main...HEAD -- modules \
+                  | grep -E 'modules/.*/' \
+                  | cut -d/ -f2 \
+                  | uniq)
+
+          # Emit modules_json_list
+          if [[ -n "$changed" ]]; then
+            echo "modules_json_list=$(printf '%s\n' $changed \
+                  | jq --raw-input . \
+                  | jq --slurp . \
+                  | jq -c .)" >> $GITHUB_OUTPUT
           else
-            echo "modules_json_list=$(echo \"$changed_modules\" | jq --raw-input . | jq --slurp . | jq -c .)" >> $GITHUB_OUTPUT
+            # If anything else changed, run full CI; otherwise skip
+            other_changes=$(git diff --name-only origin/main...HEAD -- .github scripts | wc -l)
+            if (( other_changes > 0 )); then
+              echo "modules_json_list=$all_json" >> $GITHUB_OUTPUT
+            else
+              echo "modules_json_list=[]" >> $GITHUB_OUTPUT
+            fi
           fi
 
           # Detect if full CI is needed
