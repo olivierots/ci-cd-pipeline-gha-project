@@ -102,11 +102,12 @@ jobs:
         with:
           versionSpec: '6.2.x'
 
-      - name: Determine Version
+      - id: determine_version
+        name: Determine Version
         uses: gittools/actions/gitversion/execute@v3.2.1
         with:
           overrideConfig: |
             tag-prefix=${{ matrix.module_name }}-
 
       - name: Debug Module Version
-        run: 'echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.Determine Version.outputs.MajorMinorPatch }}"'
+        run: 'echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"'
