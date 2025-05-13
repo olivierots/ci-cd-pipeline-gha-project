@@ -79,6 +79,7 @@ jobs:
     if: ${{ needs.detect.outputs.full_ci == 'true' || needs.detect.outputs.modules_json_list != '[]' }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
@@ -123,7 +124,7 @@ jobs:
         with:
           working_directory: modules/${{ matrix.module_name }}
           soft_fail: true
-          
+
   # 3) Determine Module Versions
   versioning:
     name: Determine Module Versions
@@ -131,6 +132,7 @@ jobs:
     if: ${{ needs.detect.outputs.full_ci == 'true' || needs.detect.outputs.modules_json_list != '[]' }}
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
