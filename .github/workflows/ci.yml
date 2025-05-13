@@ -72,7 +72,7 @@ jobs:
           echo "Modules JSON List: ${{ steps.detect.outputs.modules_json_list }}"
           echo "Full CI: ${{ steps.detect.outputs.full_ci }}"
 
-  # 2) Run CI Tests for Changed Modules
+  # 2) Run CI Tests for Changed Modules #
   ci-tests:
     name: Run CI Tests
     needs: detect
