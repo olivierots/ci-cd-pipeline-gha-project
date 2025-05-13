@@ -13,7 +13,7 @@ on:
       - 'scripts/**'
 
 jobs:
-  # 1) Detect Changed Modules
+  # 1) Detect Changed Modules #
   detect:
     name: 🔀 Detect Changed Modules
     runs-on: ubuntu-latest
