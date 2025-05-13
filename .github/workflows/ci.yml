@@ -33,7 +33,7 @@ jobs:
 
           # Detect changed modules
           changed_modules=$(git diff --name-only origin/main...HEAD -- modules | grep -E 'modules/.*/' | cut -d/ -f2 | uniq)
-          echo "modules_json_list=$(echo "$changed_modules" | jq --raw-input . | jq --slurp . | jq -c .)" >> $GITHUB_OUTPUT
+          echo "modules_json_list=$(echo \"$changed_modules\" | jq --raw-input . | jq --slurp . | jq -c .)" >> $GITHUB_OUTPUT
 
           # Detect if full CI is needed
           other_changes=$(git diff --name-only origin/main...HEAD -- .github scripts | wc -l)
@@ -66,7 +66,7 @@ jobs:
           terraform_version: '1.5.7'
 
       - name: Debug matrix.module_name
-        run: echo "Module name: ${{ matrix.module_name }}"
+        run: 'echo "Module name: ${{ matrix.module_name }}"'
 
       - name: Run Terraform fmt
         run: terraform fmt -check -recursive modules/${{ matrix.module_name }}
@@ -109,4 +109,4 @@ jobs:
             tag-prefix=${{ matrix.module_name }}-
 
       - name: Debug Module Version
-        run: echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.Determine Version.outputs.MajorMinorPatch }}"
+        run: 'echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.Determine Version.outputs.MajorMinorPatch }}"'
