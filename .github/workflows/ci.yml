@@ -33,7 +33,12 @@ jobs:
 
           # Detect changed modules
           changed_modules=$(git diff --name-only origin/main...HEAD -- modules | grep -E 'modules/.*/' | cut -d/ -f2 | uniq)
-          echo "modules_json_list=$(echo \"$changed_modules\" | jq --raw-input . | jq --slurp . | jq -c .)" >> $GITHUB_OUTPUT
+          if [[ -z "$changed_modules" ]]; then
+            echo "No modules changed."
+            echo "modules_json_list=[]" >> $GITHUB_OUTPUT
+          else
+            echo "modules_json_list=$(echo \"$changed_modules\" | jq --raw-input . | jq --slurp . | jq -c .)" >> $GITHUB_OUTPUT
+          fi
 
           # Detect if full CI is needed
           other_changes=$(git diff --name-only origin/main...HEAD -- .github scripts | wc -l)
@@ -72,14 +77,17 @@ jobs:
         run: terraform fmt -check -recursive modules/${{ matrix.module_name }}
 
       - name: Run Terraform validate
+        if: ${{ matrix.module_name != '' }}
         run: |
           terraform -chdir=modules/${{ matrix.module_name }}/examples/dev init -backend=false
           terraform -chdir=modules/${{ matrix.module_name }}/examples/dev validate
 
       - name: Run TFLint
+        if: ${{ matrix.module_name != '' }}
         run: tflint --chdir=modules/${{ matrix.module_name }} --init
 
       - name: Run tfsec
+        if: ${{ matrix.module_name != '' }}
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
           working_directory: modules/${{ matrix.module_name }}
