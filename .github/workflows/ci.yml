@@ -98,6 +98,11 @@ jobs:
         with:
           terraform_version: '1.5.7'
 
+      - name: Install TFLint
+        if: ${{ matrix.module_name != 'none' }}
+        run: |
+          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+
       - name: Run Terraform fmt
         if: ${{ matrix.module_name != 'none' }}
         run: terraform fmt -check -recursive modules/${{ matrix.module_name }}
@@ -118,7 +123,7 @@ jobs:
         with:
           working_directory: modules/${{ matrix.module_name }}
           soft_fail: true
-
+          
   # 3) Determine Module Versions
   versioning:
     name: Determine Module Versions
