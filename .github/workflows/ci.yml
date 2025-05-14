@@ -11,9 +11,9 @@ on:
       - 'modules/**'
       - '.github/**'
       - 'scripts/**'
-
     branches:
       - main
+
 jobs:
   # 1) Detect Changed Modules #
   detect:
@@ -31,6 +31,17 @@ jobs:
       - id: detect
         run: |
           git fetch origin main
+
+          # ── Always full CI on a push to main ────────────────────────────────────
+          if [[ "${GITHUB_EVENT_NAME}" == "push" && "${GITHUB_REF}" == "refs/heads/main" ]]; then
+            echo "::debug::Push on main → full CI override"
+            echo "modules_json_list=$(ls modules \
+                          | jq --raw-input . | jq --slurp . -c)" \
+                >> $GITHUB_OUTPUT
+            echo "full_ci=true" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          # ────────────────────────────────────────────────────────────────────────
 
           # 1) All modules as JSON array (for full-CI override)
           all_json=$(ls modules | jq --raw-input . | jq --slurp . -c)
@@ -68,12 +79,6 @@ jobs:
         run: |
           echo "Modules JSON List: ${{ steps.detect.outputs.modules_json_list }}"
           echo "Full CI: ${{ steps.detect.outputs.full_ci }}"
-
-      - name: Debug Changed Files
-        run: |
-          echo "Changed files:"
-          git diff --name-only origin/main...HEAD
-          echo "Detected changed modules: $changed"
 
   # 2) Run CI Tests for Changed Modules #
   ci-tests:
@@ -131,68 +136,66 @@ jobs:
   # 3) Determine Module Versions #
   versioning:
     name: Determine & Tag Module Versions
-    needs: 
+    needs:
       - detect
       - ci-tests
-    if: ${{ needs.detect.outputs.modules_json_list != '[]' }}   
+    if: ${{ needs.detect.outputs.modules_json_list != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
         module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
-
     steps:
-     - name: Checkout full history
-       uses: actions/checkout@v3
-       with:
-        fetch-depth: 0
-        persist-credentials: true
+      - name: Checkout full history
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+          persist-credentials: true
 
-     - name: Skip if no modules
-       if: ${{ matrix.module_name == 'none' }}
-       run: echo "No modules to process. Skipping versioning."
+      - name: Skip if no modules
+        if: ${{ matrix.module_name == 'none' }}
+        run: echo "No modules to process. Skipping versioning."
 
-     - name: Install GitVersion
-       if: ${{ matrix.module_name != 'none' }}
-       uses: gittools/actions/gitversion/setup@v3.2.1
-       with:
-        versionSpec: '6.2.x'
+      - name: Install GitVersion
+        if: ${{ matrix.module_name != 'none' }}
+        uses: gittools/actions/gitversion/setup@v3.2.1
+        with:
+          versionSpec: '6.2.x'
 
-     - id: determine_version
-       if: ${{ matrix.module_name != 'none' }}
-       name: Determine Version
-       uses: gittools/actions/gitversion/execute@v3.2.1
-       with:
-        overrideConfig: |
-          tag-prefix=${{ matrix.module_name }}-
+      - id: determine_version
+        if: ${{ matrix.module_name != 'none' }}
+        name: Determine Version
+        uses: gittools/actions/gitversion/execute@v3.2.1
+        with:
+          overrideConfig: |
+            tag-prefix=${{ matrix.module_name }}-
 
-     - name: Debug Module Version
-       if: ${{ matrix.module_name != 'none' }}
-       run: |
-        echo "Module:  ${{ matrix.module_name }}"
-        echo "Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"
+      - name: Debug Module Version
+        if: ${{ matrix.module_name != 'none' }}
+        run: |
+          echo "Module:  ${{ matrix.module_name }}"
+          echo "Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"
 
-     - name: Configure Git user
-       if: ${{ matrix.module_name != 'none' }}
-       run: |
-        git config user.name  "${{ github.actor }}"
-        git config user.email "${{ github.actor }}@users.noreply.github.com"
+      - name: Configure Git user
+        if: ${{ matrix.module_name != 'none' }}
+        run: |
+          git config user.name  "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
 
-     - name: Create & push Git tag
-      # only on real pushes to main (not PRs), and not the dummy 'none' entry
-       if: >-
-         github.event_name == 'push' &&
-         github.ref == 'refs/heads/main' &&
-         matrix.module_name != 'none'
-       env:
-         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-       run: |
-        git config user.name  "${{ github.actor }}"
-        git config user.email "${{ github.actor }}@users.noreply.github.com"
+      - name: Create & push Git tag
+        # only on real pushes to main (not PRs), and not the dummy 'none' entry
+        if: >-
+          github.event_name == 'push' &&
+          github.ref == 'refs/heads/main' &&
+          matrix.module_name != 'none'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git config user.name  "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
 
-        VERSION=${{ steps.determine_version.outputs.MajorMinorPatch }}
-        TAG="${{ matrix.module_name }}-${VERSION}"
-        git tag -a "$TAG" -m "Release $TAG"
-        git push origin "$TAG"
-        echo "Created and pushed tag: $TAG"
-
+          VERSION=${{ steps.determine_version.outputs.MajorMinorPatch }}
+          TAG="${{ matrix.module_name }}-${VERSION}"
+          git tag -a "$TAG" -m "Release $TAG"
+          git push origin "$TAG"
+          echo "Created and pushed tag: $TAG"
