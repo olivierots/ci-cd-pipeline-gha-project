@@ -128,39 +128,45 @@ jobs:
 
   # 3) Determine Module Versions #
   versioning:
-    name: Determine Module Versions
-    needs: ci-tests
-    if: ${{ needs.detect.outputs.modules_json_list != '[]' }}
-    runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
-    steps:
-      - name: Checkout full history
-        uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
+  name: Determine & Tag Module Versions
+  needs: ci-tests
+  if: ${{ needs.detect.outputs.modules_json_list != '[]' }}
+  runs-on: ubuntu-latest
+  strategy:
+    fail-fast: false
+    matrix:
+      module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list) }}
+  steps:
+    - name: Checkout full history
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
 
-      - name: Skip if no modules
-        if: ${{ matrix.module_name == 'none' }}
-        run: echo "No modules to process. Skipping versioning."
+    - name: Install GitVersion
+      uses: gittools/actions/gitversion/setup@v3.2.1
+      with:
+        versionSpec: '6.2.x'
 
-      - name: Install GitVersion
-        if: ${{ matrix.module_name != 'none' }}
-        uses: gittools/actions/gitversion/setup@v3.2.1
-        with:
-          versionSpec: '6.2.x'
+    - id: determine_version
+      name: Determine Version
+      uses: gittools/actions/gitversion/execute@v3.2.1
+      with:
+        overrideConfig: |
+          tag-prefix=${{ matrix.module_name }}-
 
-      - id: determine_version
-        if: ${{ matrix.module_name != 'none' }}
-        name: Determine Version
-        uses: gittools/actions/gitversion/execute@v3.2.1
-        with:
-          overrideConfig: |
-            tag-prefix=${{ matrix.module_name }}-
+    - name: Debug Module Version
+      run: |
+        echo ">> Module: ${{ matrix.module_name }}"
+        echo ">> Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"
 
-      - name: Debug Module Version
-        if: ${{ matrix.module_name != 'none' }}
-        run: |
-          echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"
+    - name: Create & push Git tag
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      run: |
+        VERSION=${{ steps.determine_version.outputs.MajorMinorPatch }}
+        TAG="${{ matrix.module_name }}-${VERSION}"
+        git tag -a "$TAG" -m "Release $TAG"
+        git push origin "$TAG"
+        echo "Created and pushed tag: $TAG"
+
+      
