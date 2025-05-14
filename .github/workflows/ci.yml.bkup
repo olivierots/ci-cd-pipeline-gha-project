@@ -1,185 +1,169 @@
-name: Terraform CI — Dynamic Modules
+name: Terraform CI with Versioning
 
-# Trigger on any PR or push so we can diff against main
 on:
   pull_request:
-    types: [opened, reopened, synchronize]
+    paths:
+      - 'modules/**'
+      - '.github/**'
+      - 'scripts/**'
   push:
+    paths:
+      - 'modules/**'
+      - '.github/**'
+      - 'scripts/**'
 
 jobs:
-  # 1) Detect what changed
+  # 1) Detect Changed Modules #
   detect:
-    name: 🔀 What changed?
+    name: 🔀 Detect Changed Modules
     runs-on: ubuntu-latest
-    permissions:
-      pull-requests: read
     outputs:
-      s3_bucket:     ${{ steps.detect.outputs.s3_bucket }}
-      ssm_parameter: ${{ steps.detect.outputs.ssm_parameter }}
-      full_ci:       ${{ steps.detect.outputs.full_ci }}
+      modules_json_list: ${{ steps.detect.outputs.modules_json_list }}
+      full_ci: ${{ steps.detect.outputs.full_ci }}
     steps:
-      - name: Checkout code (full history)
+      - name: Checkout code
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
 
-      - name: Detect changes vs main
-        id: detect
-        shell: bash
+      - id: detect
         run: |
-            git fetch origin main
-            files=$(git diff --name-only origin/main...HEAD)
-  
-            s3=false; ssm=false; other=false
-            for f in $files; do
-              [[ $f == modules/s3_bucket/*    ]] && s3=true
-              [[ $f == modules/ssm_parameter/* ]] && ssm=true
-              [[ $f != modules/s3_bucket/* && $f != modules/ssm_parameter/* ]] && other=true
-            done
-  
-            # Force full CI for pushes to main
-            if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
-              full_ci=true
-            elif [[ $s3 == "false" && $ssm == "false" && $other == "true" ]]; then
-              full_ci=true
+          git fetch origin main
+          files=$(git diff --name-only origin/main...HEAD)
+
+          # Detect changed modules
+          all_modules=$(ls modules)
+          all_json=$(printf '%s\n' $all_modules \
+                  | jq --raw-input . \
+                  | jq --slurp . \
+                  | jq -c .)
+
+          # only modules that actually changed
+          changed=$(git diff --name-only origin/main...HEAD -- modules \
+                  | grep -E 'modules/.*/' \
+                  | cut -d/ -f2 \
+                  | uniq)
+
+          # Emit modules_json_list
+          if [[ -n "$changed" ]]; then
+            echo "modules_json_list=$(printf '%s\n' $changed \
+                  | jq --raw-input . \
+                  | jq --slurp . \
+                  | jq -c .)" >> $GITHUB_OUTPUT
+          else
+            # If anything else changed, run full CI; otherwise skip
+            other_changes=$(git diff --name-only origin/main...HEAD -- .github scripts | wc -l)
+            if (( other_changes > 0 )); then
+              echo "modules_json_list=$all_json" >> $GITHUB_OUTPUT
             else
-              full_ci=false
+              echo "modules_json_list=[]" >> $GITHUB_OUTPUT
             fi
-  
-            echo "s3_bucket=$s3"      >> $GITHUB_OUTPUT
-            echo "ssm_parameter=$ssm" >> $GITHUB_OUTPUT
-            echo "full_ci=$full_ci"   >> $GITHUB_OUTPUT
+          fi
 
-      - name: Show results
+          # Detect if full CI is needed
+          other_changes=$(git diff --name-only origin/main...HEAD -- .github scripts | wc -l)
+          if [[ $other_changes -gt 0 ]]; then
+            echo "full_ci=true" >> $GITHUB_OUTPUT
+          else
+            echo "full_ci=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Debug Outputs
         run: |
-          echo "→ s3_bucket changed?     ${{ steps.detect.outputs.s3_bucket }}"
-          echo "→ ssm_parameter changed? ${{ steps.detect.outputs.ssm_parameter }}"
-          echo "→ run full CI?           ${{ steps.detect.outputs.full_ci }}"
+          echo "Modules JSON List: ${{ steps.detect.outputs.modules_json_list }}"
+          echo "Full CI: ${{ steps.detect.outputs.full_ci }}"
 
-  # 2) terraform fmt → s3_bucket
-  fmt-s3:
-    name: 🖨️ fmt → s3_bucket
+      - name: Debug Changed Files
+        run: |
+          echo "Changed files:"
+          git diff --name-only origin/main...HEAD
+          echo "Detected changed modules: $changed"
+
+  # 2) Run CI Tests for Changed Modules #
+  ci-tests:
+    name: Run CI Tests
     needs: detect
+    if: ${{ needs.detect.outputs.full_ci == 'true' || needs.detect.outputs.modules_json_list != '[]' }}
     runs-on: ubuntu-latest
-    if: needs.detect.outputs.s3_bucket == 'true' || needs.detect.outputs.full_ci == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
-      - uses: actions/checkout@v3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Debug matrix.module_name
+        run: 'echo "Module name: ${{ matrix.module_name }}"'
+
+      - name: Skip if no modules
+        if: ${{ matrix.module_name == 'none' }}
+        run: echo "No modules to process. Skipping CI tests."
+
       - name: Setup Terraform
+        if: ${{ matrix.module_name != 'none' }}
         uses: hashicorp/setup-terraform@v2
         with:
           terraform_version: '1.5.7'
-      - name: terraform fmt (modules/s3_bucket)
-        run: terraform fmt -check -recursive modules/s3_bucket
 
-  # 3) terraform fmt → ssm_parameter
-  fmt-ssm:
-    name: 🖨️ fmt → ssm_parameter
-    needs: detect
-    runs-on: ubuntu-latest
-    if: needs.detect.outputs.ssm_parameter == 'true' || needs.detect.outputs.full_ci == 'true'
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: terraform fmt (modules/ssm_parameter)
-        run: terraform fmt -check -recursive modules/ssm_parameter
-
-  # 4) terraform validate → s3_bucket
-  validate-s3:
-    name: ✅ validate → s3_bucket
-    needs: [detect, fmt-s3]
-    runs-on: ubuntu-latest
-    if: needs.detect.outputs.s3_bucket == 'true' || needs.detect.outputs.full_ci == 'true'
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: Init & validate example (s3_bucket)
-        run: |
-          terraform -chdir=modules/s3_bucket/examples/dev init -backend=false
-          terraform -chdir=modules/s3_bucket/examples/dev validate
-      - name: Init & validate module (s3_bucket)
-        run: |
-          terraform -chdir=modules/s3_bucket init -backend=false
-          terraform -chdir=modules/s3_bucket validate
-
-  # 5) terraform validate → ssm_parameter
-  validate-ssm:
-    name: ✅ validate → ssm_parameter
-    needs: [detect, fmt-ssm]
-    runs-on: ubuntu-latest
-    if: needs.detect.outputs.ssm_parameter == 'true' || needs.detect.outputs.full_ci == 'true'
-    steps:
-      - uses: actions/checkout@v3
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v2
-        with:
-          terraform_version: '1.5.7'
-      - name: Init & validate example (ssm_parameter)
-        run: |
-          terraform -chdir=modules/ssm_parameter/examples/dev init -backend=false
-          terraform -chdir=modules/ssm_parameter/examples/dev validate
-      - name: Init & validate module (ssm_parameter)
-        run: |
-          terraform -chdir=modules/ssm_parameter init -backend=false
-          terraform -chdir=modules/ssm_parameter validate
-
-  # 6) TFLint → s3_bucket
-  lint-s3:
-    name: 🔍 TFLint → s3_bucket
-    needs: validate-s3
-    runs-on: ubuntu-latest
-    if: needs.detect.outputs.s3_bucket == 'true' || needs.detect.outputs.full_ci == 'true'
-    steps:
-      - uses: actions/checkout@v3
       - name: Install TFLint
+        if: ${{ matrix.module_name != 'none' }}
         run: |
           curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-      - name: tflint (modules/s3_bucket)
-        run: tflint --chdir=modules/s3_bucket --init
 
-  # 7) TFLint → ssm_parameter
-  lint-ssm:
-    name: 🔍 TFLint → ssm_parameter
-    needs: validate-ssm
-    runs-on: ubuntu-latest
-    if: needs.detect.outputs.ssm_parameter == 'true' || needs.detect.outputs.full_ci == 'true'
-    steps:
-      - uses: actions/checkout@v3
-      - name: Install TFLint
+      - name: Run Terraform fmt
+        if: ${{ matrix.module_name != 'none' }}
+        run: terraform fmt -check -recursive modules/${{ matrix.module_name }}
+
+      - name: Run Terraform validate
+        if: ${{ matrix.module_name != 'none' }}
         run: |
-          curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
-      - name: tflint (modules/ssm_parameter)
-        run: tflint --chdir=modules/ssm_parameter --init
+          terraform -chdir=modules/${{ matrix.module_name }}/examples/dev init -backend=false
+          terraform -chdir=modules/${{ matrix.module_name }}/examples/dev validate
 
-  # 8) tfsec → s3_bucket
-  tfsec-s3:
-    name: 🔒 tfsec → s3_bucket
-    needs: lint-s3
-    runs-on: ubuntu-latest
-    if: needs.detect.outputs.s3_bucket == 'true' || needs.detect.outputs.full_ci == 'true'
-    steps:
-      - uses: actions/checkout@v3
-      - name: tfsec (modules/s3_bucket)
+      - name: Run TFLint
+        if: ${{ matrix.module_name != 'none' }}
+        run: tflint --chdir=modules/${{ matrix.module_name }} --init
+
+      - name: Run tfsec
+        if: ${{ matrix.module_name != 'none' }}
         uses: aquasecurity/tfsec-action@v1.0.3
         with:
-          working_directory: modules/s3_bucket
+          working_directory: modules/${{ matrix.module_name }}
           soft_fail: true
 
-  # 9) tfsec → ssm_parameter
-  tfsec-ssm:
-    name: 🔒 tfsec → ssm_parameter
-    needs: lint-ssm
+  # 3) Determine Module Versions
+  versioning:
+    name: Determine Module Versions
+    needs: ci-tests
+    if: ${{ needs.detect.outputs.full_ci == 'true' || needs.detect.outputs.modules_json_list != '[]' }}
     runs-on: ubuntu-latest
-    if: needs.detect.outputs.ssm_parameter == 'true' || needs.detect.outputs.full_ci == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
-      - uses: actions/checkout@v3
-      - name: tfsec (modules/ssm_parameter)
-        uses: aquasecurity/tfsec-action@v1.0.3
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Skip if no modules
+        if: ${{ matrix.module_name == 'none' }}
+        run: echo "No modules to process. Skipping versioning."
+
+      - name: Install GitVersion
+        if: ${{ matrix.module_name != 'none' }}
+        uses: gittools/actions/gitversion/setup@v3.2.1
         with:
-          working_directory: modules/ssm_parameter
-          soft_fail: true
+          versionSpec: '6.2.x'
+
+      - id: determine_version
+        if: ${{ matrix.module_name != 'none' }}
+        name: Determine Version
+        uses: gittools/actions/gitversion/execute@v3.2.1
+        with:
+          overrideConfig: |
+            tag-prefix=${{ matrix.module_name }}-
+
+      - name: Debug Module Version
+        if: ${{ matrix.module_name != 'none' }}
+        run: 'echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"'

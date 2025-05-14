@@ -1,0 +1,244 @@
+# .github/workflows/ci.yml
+name: Terraform CI — Dynamic Modules
+
+on:
+  pull_request:
+    types: [opened, reopened, synchronize]
+  push:
+
+jobs:
+  # 1) Detect what changed
+  detect:
+    name: 🔀 What changed?
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: read
+    outputs:
+      s3_bucket:        ${{ steps.detect.outputs.s3 }}
+      ssm_parameter:    ${{ steps.detect.outputs.ssm }}
+      sqs:              ${{ steps.detect.outputs.sqs }}
+      full_ci:          ${{ steps.detect.outputs.full_ci }}
+    steps:
+      - name: Checkout full history
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Detect changes vs main
+        id: detect
+        shell: bash
+        run: |
+          git fetch origin main
+          files=$(git diff --name-only origin/main...HEAD)
+
+          s3=false; ssm=false; sqs=false; other=false
+          for f in $files; do
+            [[ $f == modules/s3_bucket/**        ]] && s3=true
+            [[ $f == modules/ssm_parameter/**    ]] && ssm=true
+            [[ $f == modules/simple_sqs_queue/** ]] && sqs=true
+            if [[ $f != modules/s3_bucket/** && \
+                  $f != modules/ssm_parameter/** && \
+                  $f != modules/simple_sqs_queue/** ]]; then
+              other=true
+            fi
+          done
+
+          # Full CI on push to main, or if only "other" files outside the modules folder changed
+          if [[ "${{ github.event_name }}" == "push" && "${{ github.ref }}" == "refs/heads/main" ]]; then
+            full_ci=true
+          elif [[ $s3 == "false" && $ssm == "false" && $sqs == "false" && $other == "true" ]]; then
+            full_ci=true
+          else
+            full_ci=false
+          fi
+
+          echo "s3=$s3"       >> $GITHUB_OUTPUT
+          echo "ssm=$ssm"     >> $GITHUB_OUTPUT
+          echo "sqs=$sqs"     >> $GITHUB_OUTPUT
+          echo "full_ci=$full_ci" >> $GITHUB_OUTPUT
+
+      - name: Show results
+        run: |
+          echo "→ s3_bucket changed?      ${{ steps.detect.outputs.s3 }}"
+          echo "→ ssm_parameter changed?  ${{ steps.detect.outputs.ssm }}"
+          echo "→ simple_sqs_queue changed? ${{ steps.detect.outputs.sqs }}"
+          echo "→ run full CI?            ${{ steps.detect.outputs.full_ci }}"
+
+  # 2) fmt → s3_bucket
+  fmt-s3:
+    name: 🖨️ fmt → s3_bucket
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.s3 == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: terraform fmt (modules/s3_bucket)
+        run: terraform fmt -check -recursive modules/s3_bucket
+
+  # 3) fmt → ssm_parameter
+  fmt-ssm:
+    name: 🖨️ fmt → ssm_parameter
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.ssm == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: terraform fmt (modules/ssm_parameter)
+        run: terraform fmt -check -recursive modules/ssm_parameter
+
+  # 4) fmt → simple_sqs_queue
+  fmt-sqs:
+    name: 🖨️ fmt → simple_sqs_queue
+    needs: detect
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.sqs == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: terraform fmt (modules/simple_sqs_queue)
+        run: terraform fmt -check -recursive modules/simple_sqs_queue
+
+  # 5) validate → s3_bucket
+  validate-s3:
+    name: ✅ validate → s3_bucket
+    needs: [detect, fmt-s3]
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.s3 == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate example (s3_bucket)
+        run: |
+          terraform -chdir=modules/s3_bucket/examples/dev init -backend=false
+          terraform -chdir=modules/s3_bucket/examples/dev validate
+      - name: Init & validate module (s3_bucket)
+        run: |
+          terraform -chdir=modules/s3_bucket init -backend=false
+          terraform -chdir=modules/s3_bucket validate
+
+  # 6) validate → ssm_parameter
+  validate-ssm:
+    name: ✅ validate → ssm_parameter
+    needs: [detect, fmt-ssm]
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.ssm == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate example (ssm_parameter)
+        run: |
+          terraform -chdir=modules/ssm_parameter/examples/dev init -backend=false
+          terraform -chdir=modules/ssm_parameter/examples/dev validate
+      - name: Init & validate module (ssm_parameter)
+        run: |
+          terraform -chdir=modules/ssm_parameter init -backend=false
+          terraform -chdir=modules/ssm_parameter validate
+
+  # 7) validate → simple_sqs_queue
+  validate-sqs:
+    name: ✅ validate → simple_sqs_queue
+    needs: [detect, fmt-sqs]
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.sqs == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v2
+        with:
+          terraform_version: '1.5.7'
+      - name: Init & validate example (simple_sqs_queue)
+        run: |
+          terraform -chdir=modules/simple_sqs_queue/examples/dev init -backend=false
+          terraform -chdir=modules/simple_sqs_queue/examples/dev validate
+      - name: Init & validate module (simple_sqs_queue)
+        run: |
+          terraform -chdir=modules/simple_sqs_queue init -backend=false
+          terraform -chdir=modules/simple_sqs_queue validate
+
+  # 8) TFLint → all modules
+  lint-s3:
+    name: 🔍 TFLint → s3_bucket
+    needs: validate-s3
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.s3 == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: tflint (s3_bucket)
+        run: tflint --chdir=modules/s3_bucket --init
+
+  lint-ssm:
+    name: 🔍 TFLint → ssm_parameter
+    needs: validate-ssm
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.ssm == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: tflint (ssm_parameter)
+        run: tflint --chdir=modules/ssm_parameter --init
+
+  lint-sqs:
+    name: 🔍 TFLint → simple_sqs_queue
+    needs: validate-sqs
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.sqs == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - run: curl -s https://raw.githubusercontent.com/terraform-linters/tflint/master/install_linux.sh | bash
+      - name: tflint (simple_sqs_queue)
+        run: tflint --chdir=modules/simple_sqs_queue --init
+
+  # 9) tfsec → all modules
+  tfsec-s3:
+    name: 🔒 tfsec → s3_bucket
+    needs: lint-s3
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.s3 == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: modules/s3_bucket
+          soft_fail: true
+
+  tfsec-ssm:
+    name: 🔒 tfsec → ssm_parameter
+    needs: lint-ssm
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.ssm == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: modules/ssm_parameter
+          soft_fail: true
+
+  tfsec-sqs:
+    name: 🔒 tfsec → simple_sqs_queue
+    needs: lint-sqs
+    runs-on: ubuntu-latest
+    if: needs.detect.outputs.sqs == 'true' || needs.detect.outputs.full_ci == 'true'
+    steps:
+      - uses: actions/checkout@v3
+      - uses: aquasecurity/tfsec-action@v1.0.3
+        with:
+          working_directory: modules/simple_sqs_queue
+          soft_fail: true
