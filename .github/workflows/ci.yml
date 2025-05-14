@@ -56,7 +56,11 @@ jobs:
           fi
 
           # emit a human-friendly full_ci flag too
-          echo "full_ci=$(( other_changes > 0 ))" >> $GITHUB_OUTPUT
+          if (( other_changes > 0 )); then
+            echo "full_ci=true"  >> $GITHUB_OUTPUT
+          else
+            echo "full_ci=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Debug Outputs
         run: |
@@ -131,7 +135,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list) }}
+        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
       - name: Checkout full history
         uses: actions/checkout@v3
