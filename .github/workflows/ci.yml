@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       modules_json_list: ${{ steps.detect.outputs.modules_json_list }}
-      full_ci:             ${{ steps.detect.outputs.full_ci }}
+      full_ci: ${{ steps.detect.outputs.full_ci }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -65,7 +65,7 @@ jobs:
       - name: Debug Outputs
         run: |
           echo "Modules JSON List: ${{ steps.detect.outputs.modules_json_list }}"
-          echo "Full CI:             ${{ steps.detect.outputs.full_ci }}"
+          echo "Full CI: ${{ steps.detect.outputs.full_ci }}"
 
       - name: Debug Changed Files
         run: |
@@ -142,6 +142,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Debug which module we’re versioning
+        run: 'echo "Versioning module: ${{ matrix.module_name }}"'
+
       - name: Install GitVersion
         uses: gittools/actions/gitversion/setup@v3.2.1
         with:
@@ -156,8 +159,8 @@ jobs:
 
       - name: Debug Module Version
         run: |
-          echo ">> Module: ${{ matrix.module_name }}"
-          echo ">> Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"
+          echo "Module:  ${{ matrix.module_name }}"
+          echo "Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"
 
       - name: Create & push Git tag
         env:
@@ -168,5 +171,3 @@ jobs:
           git tag -a "$TAG" -m "Release $TAG"
           git push origin "$TAG"
           echo "Created and pushed tag: $TAG"
-
-      
