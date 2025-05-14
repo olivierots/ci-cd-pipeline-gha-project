@@ -130,7 +130,7 @@ jobs:
   versioning:
     name: Determine & Tag Module Versions
     needs: ci-tests
-    if: ${{ needs.detect.outputs.modules_json_list != '[]' }}
+    if: ${{ needs.detect.outputs.modules_json_list != '' && needs.detect.outputs.modules_json_list != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
