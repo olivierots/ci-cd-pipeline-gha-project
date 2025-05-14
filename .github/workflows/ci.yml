@@ -129,9 +129,11 @@ jobs:
   # 3) Determine Module Versions #
   versioning:
     name: Determine & Tag Module Versions
-    needs: ci-tests
+    needs: 
+      - detect
+      - ci-tests
+    if: ${{ needs.detect.outputs.modules_json_list != '[]' }}   
     runs-on: ubuntu-latest
-
     strategy:
       fail-fast: false
       matrix:
