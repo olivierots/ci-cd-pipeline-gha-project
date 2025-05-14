@@ -72,6 +72,12 @@ jobs:
           echo "Modules JSON List: ${{ steps.detect.outputs.modules_json_list }}"
           echo "Full CI: ${{ steps.detect.outputs.full_ci }}"
 
+      - name: Debug Changed Files
+        run: |
+          echo "Changed files:"
+          git diff --name-only origin/main...HEAD
+          echo "Detected changed modules: $changed"
+
   # 2) Run CI Tests for Changed Modules #
   ci-tests:
     name: Run CI Tests
