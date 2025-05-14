@@ -169,6 +169,12 @@ jobs:
         echo "Module:  ${{ matrix.module_name }}"
         echo "Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"
 
+     - name: Configure Git user
+       if: ${{ matrix.module_name != 'none' }}
+       run: |
+        git config user.name  "${{ github.actor }}"
+        git config user.email "${{ github.actor }}@users.noreply.github.com"
+
      - name: Create & push Git tag
        if: ${{ matrix.module_name != 'none' }}
        env:
