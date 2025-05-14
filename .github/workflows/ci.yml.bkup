@@ -19,7 +19,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       modules_json_list: ${{ steps.detect.outputs.modules_json_list }}
-      full_ci:             ${{ steps.detect.outputs.full_ci }}
+      full_ci: ${{ steps.detect.outputs.full_ci }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
@@ -29,39 +29,49 @@ jobs:
       - id: detect
         run: |
           git fetch origin main
+          files=$(git diff --name-only origin/main...HEAD)
 
-          # 1) All modules as JSON array (for full-CI override)
-          all_json=$(ls modules | jq --raw-input . | jq --slurp . -c)
+          # Detect changed modules
+          all_modules=$(ls modules)
+          all_json=$(printf '%s\n' $all_modules \
+                  | jq --raw-input . \
+                  | jq --slurp . \
+                  | jq -c .)
 
-          # 2) Which top-level modules actually changed?
+          # only modules that actually changed
           changed=$(git diff --name-only origin/main...HEAD -- modules \
-                   | grep -E '^modules/[^/]+/' \
-                   | cut -d/ -f2 \
-                   | sort -u)
+                  | grep -E 'modules/.*/' \
+                  | cut -d/ -f2 \
+                  | uniq)
 
-          # 3) Did we touch CI or scripts?  (full-CI override)
-          other_changes=$(git diff --name-only origin/main...HEAD -- .github scripts | wc -l)
-
-          if (( other_changes > 0 )); then
-            # any CI/scripts edits → run *all* modules
-            echo "modules_json_list=$all_json" >> $GITHUB_OUTPUT
-          elif [[ -n "$changed" ]]; then
-            # only the truly changed modules
+          # Emit modules_json_list
+          if [[ -n "$changed" ]]; then
             echo "modules_json_list=$(printf '%s\n' $changed \
-                   | jq --raw-input . | jq --slurp . -c)" \
-                 >> $GITHUB_OUTPUT
+                  | jq --raw-input . \
+                  | jq --slurp . \
+                  | jq -c .)" >> $GITHUB_OUTPUT
           else
-            # nothing to do
-            echo "modules_json_list=[]" >> $GITHUB_OUTPUT
+            # If anything else changed, run full CI; otherwise skip
+            other_changes=$(git diff --name-only origin/main...HEAD -- .github scripts | wc -l)
+            if (( other_changes > 0 )); then
+              echo "modules_json_list=$all_json" >> $GITHUB_OUTPUT
+            else
+              echo "modules_json_list=[]" >> $GITHUB_OUTPUT
+            fi
           fi
 
-          # emit a human-friendly full_ci flag too
-          echo "full_ci=$(( other_changes > 0 ))" >> $GITHUB_OUTPUT
+          # Detect if full CI is needed
+          other_changes=$(git diff --name-only origin/main...HEAD -- .github scripts | wc -l)
+          if [[ $other_changes -gt 0 ]]; then
+            echo "full_ci=true" >> $GITHUB_OUTPUT
+          else
+            echo "full_ci=false" >> $GITHUB_OUTPUT
+          fi
 
       - name: Debug Outputs
         run: |
           echo "Modules JSON List: ${{ steps.detect.outputs.modules_json_list }}"
-          echo "Full CI:             ${{ steps.detect.outputs.full_ci }}"
+          echo "Full CI: ${{ steps.detect.outputs.full_ci }}"
 
       - name: Debug Changed Files
         run: |
@@ -73,18 +83,18 @@ jobs:
   ci-tests:
     name: Run CI Tests
     needs: detect
-    if: ${{ needs.detect.outputs.modules_json_list != '[]' }}
+    if: ${{ needs.detect.outputs.full_ci == 'true' || needs.detect.outputs.modules_json_list != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list) }}
+        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v3
 
       - name: Debug matrix.module_name
-        run: echo "Module name: ${{ matrix.module_name }}"
+        run: 'echo "Module name: ${{ matrix.module_name }}"'
 
       - name: Skip if no modules
         if: ${{ matrix.module_name == 'none' }}
@@ -122,21 +132,19 @@ jobs:
           working_directory: modules/${{ matrix.module_name }}
           soft_fail: true
 
-  # 3) Determine Module Versions #
+  # 3) Determine Module Versions
   versioning:
     name: Determine Module Versions
     needs: ci-tests
-    if: ${{ needs.detect.outputs.modules_json_list != '[]' }}
+    if: ${{ needs.detect.outputs.full_ci == 'true' || needs.detect.outputs.modules_json_list != '[]' }}
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
       matrix:
-        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list) }}
+        module_name: ${{ fromJSON(needs.detect.outputs.modules_json_list || '["none"]') }}
     steps:
-      - name: Checkout full history
+      - name: Checkout code
         uses: actions/checkout@v3
-        with:
-          fetch-depth: 0
 
       - name: Skip if no modules
         if: ${{ matrix.module_name == 'none' }}
@@ -158,5 +166,4 @@ jobs:
 
       - name: Debug Module Version
         if: ${{ matrix.module_name != 'none' }}
-        run: |
-          echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"
+        run: 'echo "Module: ${{ matrix.module_name }}, Version: ${{ steps.determine_version.outputs.MajorMinorPatch }}"'
